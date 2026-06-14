@@ -13,7 +13,7 @@ Pre-alpha. Public for transparency; no support, no guarantees, no SLA. Issues an
 ## Install (macOS)
 
 Release builds are **ad-hoc signed but not notarized** (no Apple Developer ID).
-macOS quarantines them on download and shows an *"unidentified developer"*
+macOS quarantines them on download and shows an _"unidentified developer"_
 prompt on first launch. Drag **Mizraj.app** into **Applications**, then either:
 
 - **No Terminal:** double-click it once (the launch is blocked), then open
@@ -21,9 +21,9 @@ prompt on first launch. Drag **Mizraj.app** into **Applications**, then either:
   Anyway**. macOS remembers the choice after that.
 - **One-liner:** clear the quarantine flag so it opens directly:
 
-  ```sh
-  xattr -dr com.apple.quarantine /Applications/Mizraj.app
-  ```
+    ```sh
+    xattr -dr com.apple.quarantine /Applications/Mizraj.app
+    ```
 
 The required `libghostty-vt` native library is bundled inside the `.app`
 (`Contents/Frameworks/`), so there is nothing else to install.

@@ -23,10 +23,19 @@ LIBGHOSTTY_LIB_DIR = { value = "target/libghostty", relative = true }
 # <repo>/target/<profile>/deps/, so `@executable_path/../../libghostty` resolves
 # to the same <repo>/target/libghostty. Without it the test loader can't find
 # the dylib and every FFI-touching test aborts at launch.
+#
+# The third rpath is for the PACKAGED .app: Tauri's `bundle.macOS.frameworks`
+# copies libghostty.dylib into `Mizraj.app/Contents/Frameworks/`, and the binary
+# sits at `Contents/MacOS/`, so `@executable_path/../Frameworks` resolves the
+# dylib's `@rpath/libghostty.dylib` install_name at launch. In dev/test that
+# directory does not exist, so dyld silently ignores this rpath and falls back to
+# the libghostty ones above — harmless to carry it in every macOS link.
 [target.'cfg(target_os = "macos")']
 rustflags = [
 	"-C",
 	"link-arg=-Wl,-rpath,@executable_path/../libghostty",
 	"-C",
 	"link-arg=-Wl,-rpath,@executable_path/../../libghostty",
+	"-C",
+	"link-arg=-Wl,-rpath,@executable_path/../Frameworks",
 ]

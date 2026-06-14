@@ -37,7 +37,14 @@ jobs:
     publish-tauri:
         needs: release-please
         if: ${{ needs.release-please.outputs.release_created == 'true' || github.event_name == 'workflow_dispatch' }}
-        runs-on: macos-latest
+        # Pinned to macos-15 (Apple Silicon, Xcode 16 / SDK 15.x) on purpose, NOT
+        # macos-latest: ghostty pins Zig 0.15.2, and Zig 0.15.2 cannot link
+        # against the macOS 26.4 SDK (ziglang/zig#31658). When GitHub migrates
+        # macos-latest to macos-26 that SDK would silently break the libghostty
+        # build, and we can't bump Zig (the pin forbids it). macos-15 keeps the
+        # build on a pre-26.4 SDK. The dylib it produces is arm64, matching the
+        # arm64 app binary tauri-action builds on this runner.
+        runs-on: macos-15
 
         steps:
             - uses: actions/checkout@v4
@@ -57,6 +64,41 @@ jobs:
 
             - name: Install dependencies
               run: pnpm install --frozen-lockfile
+
+            # libghostty-vt is a native dylib the app links at build time and
+            # bundles into the .app (bundle.macOS.frameworks in tauri.conf.json).
+            # Upstream ships no prebuilt per-commit binary, so build it from the
+            # pinned ghostty commit with Zig — the exact path local dev uses
+            # (scripts/setup-libghostty.sh). The bundler hard-errors "Library not
+            # found" if the dylib is absent, so this MUST run before tauri-action.
+            - name: Read pinned ghostty commit
+              id: ghostty
+              run: echo "sha=$(tr -d '[:space:]' < crates/mizraj-term-sys/vendor/VERSION)" >> "$GITHUB_OUTPUT"
+
+            # Cache the built dylib on the pin SHA: the slow Zig download + ghostty
+            # clone + ReleaseFast build only runs when vendor/VERSION moves.
+            - name: Cache libghostty-vt dylib
+              id: libghostty-cache
+              uses: actions/cache@v4
+              with:
+                  path: target/libghostty
+                  key: libghostty-${{ runner.os }}-${{ runner.arch }}-zig0.15.2-${{ steps.ghostty.outputs.sha }}
+
+            - name: Build libghostty-vt
+              if: steps.libghostty-cache.outputs.cache-hit != 'true'
+              run: ./scripts/setup-libghostty.sh
+
+            # Fail fast (cache hit or miss) if the artifact is wrong, and re-assert
+            # the ad-hoc signature so dyld on arm64 — which refuses a dylib with no
+            # cdhash — always accepts the bundled copy. Tauri copies the dylib
+            # verbatim into Contents/Frameworks/, so this signature carries through.
+            - name: Verify + ad-hoc sign libghostty-vt dylib
+              run: |
+                  test -f target/libghostty/libghostty.dylib
+                  lipo -archs target/libghostty/libghostty.dylib
+                  otool -D target/libghostty/libghostty.dylib
+                  codesign --force -s - target/libghostty/libghostty.dylib
+                  codesign -dv target/libghostty/libghostty.dylib
 
             - uses: tauri-apps/tauri-action@v0
               env:

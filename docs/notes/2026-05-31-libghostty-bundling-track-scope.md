@@ -5,6 +5,21 @@
 - **Status**: à planifier (via `/interview` → `/backlog`) — PAS encore une track active
 - **Décision amont**: garder `libghostty-vt` (cf. ADR `docs/decisions/2026-05-22-libghostty-c-abi.md`, amendement 2026-05-31)
 
+> **Update 2026-06-14 — chemin macOS implémenté.** Le bundling macOS est fait et
+> vérifié de bout en bout (dylib dans `.app/Contents/Frameworks/`, rpath
+> `@executable_path/../Frameworks`, dyld charge la copie bundlée au lancement).
+>
+> - CI release (`.github/workflows/release.yml`, job `publish-tauri`, pin
+>   `macos-15`) build le dylib via `scripts/setup-libghostty.sh` avant
+>   tauri-action, caché sur le SHA du pin.
+> - Bundle Tauri via `bundle.macOS.frameworks` + rpath dans `.cargo/config.toml`.
+> - Renommage `libghostty-vt`→`libghostty` : **conservé** (le script copie +
+>   `install_name_tool -id`), CI le réutilise.
+> - Signature : le dylib est ad-hoc/linker-signé par Zig, copié verbatim → dyld
+>   l'accepte sur arm64. Notarisation complète hors scope (pas de Dev ID) ;
+>   un-quarantine documenté dans le README.
+> - **Reste** : `links = "ghostty"` dans `mizraj-term-sys/Cargo.toml` ; Linux/Windows.
+
 ## Objectif
 
 L'utilisateur final (et idéalement le dev) n'a **rien** à installer : `libghostty` est

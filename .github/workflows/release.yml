@@ -29,6 +29,42 @@ jobs:
             - uses: googleapis/release-please-action@v5
               id: release
 
+            # release-please's json updater rewrites src-tauri/tauri.conf.json with
+            # its own serializer on every version bump, re-expanding the single-line
+            # `frameworks` array and breaking `oxfmt --check` (the format CI job).
+            # CHANGELOG.md + the manifest dodge this by being oxfmt-ignored, but
+            # tauri.conf.json is hand-edited, so instead push an oxfmt fixup onto the
+            # open release PR — its format job then stays green and main stays clean
+            # once merged. Only runs while a release PR is open (steps.release.pr).
+            - uses: actions/checkout@v4
+              if: ${{ steps.release.outputs.pr }}
+              with:
+                  ref: ${{ fromJSON(steps.release.outputs.pr).headBranchName }}
+
+            - uses: pnpm/action-setup@v4
+              if: ${{ steps.release.outputs.pr }}
+
+            - uses: actions/setup-node@v4
+              if: ${{ steps.release.outputs.pr }}
+              with:
+                  node-version: 24
+                  cache: pnpm
+
+            - name: oxfmt the release-bumped tauri.conf.json
+              if: ${{ steps.release.outputs.pr }}
+              run: |
+                  set -euo pipefail
+                  pnpm install --frozen-lockfile
+                  pnpm exec oxfmt --write src-tauri/tauri.conf.json
+                  if git diff --quiet -- src-tauri/tauri.conf.json; then
+                      echo "tauri.conf.json already oxfmt-clean, nothing to push"
+                      exit 0
+                  fi
+                  git config user.name "github-actions[bot]"
+                  git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+                  git commit -am "chore: format tauri.conf.json after release bump"
+                  git push
+
     # Builds the unsigned macOS binary and uploads it to the release that
     # release-please just published. Runs in the same workflow because a tag
     # pushed with the default GITHUB_TOKEN does not trigger a separate
@@ -120,14 +156,16 @@ jobs:
               with:
                   tagName: ${{ inputs.tag || needs.release-please.outputs.tag_name }}
 
-            # The published .app is unsigned + un-notarized (no Apple Developer
-            # ID), so macOS quarantines it on download and reports "Mizraj is
-            # damaged and can't be opened" — the README documents the one-time
-            # un-quarantine, but downloaders never see the README. Surface the
-            # command on the release body itself, where they actually are.
+            # The published .app is ad-hoc signed (tauri.conf.json
+            # bundle.macOS.signingIdentity "-") but not notarized (no Apple
+            # Developer ID), so macOS quarantines it on download and shows an
+            # "unidentified developer" prompt — bypassable via System Settings →
+            # Privacy & Security → Open Anyway, or a one-time un-quarantine. The
+            # README documents this, but downloaders never see the README, so
+            # surface it on the release body itself, where they actually are.
             # Idempotent: the marker check stops a workflow_dispatch rebuild from
             # appending it twice.
-            - name: Surface the macOS un-quarantine note on the release
+            - name: Surface the macOS install note on the release
               env:
                   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
                   TAG: ${{ inputs.tag || needs.release-please.outputs.tag_name }}
@@ -138,6 +176,6 @@ jobs:
                       echo "macOS install note already present, skipping"
                       exit 0
                   fi
-                  note=$'### Install (macOS)\n\nThese builds are **unsigned and not notarized** (no Apple Developer ID), so macOS quarantines them on download and reports *"Mizraj is damaged and can\'t be opened"*. This is expected. Drag **Mizraj.app** into **Applications**, then clear the quarantine flag once:\n\n```sh\nxattr -dr com.apple.quarantine /Applications/Mizraj.app\n```'
+                  note=$'### Install (macOS)\n\nThese builds are **ad-hoc signed but not notarized** (no Apple Developer ID), so macOS quarantines them on download and shows an *"unidentified developer"* prompt on first launch. This is expected. Drag **Mizraj.app** into **Applications**, then either double-click it once and click **Open Anyway** in **System Settings \xe2\x86\x92 Privacy & Security**, or clear the quarantine flag from a terminal:\n\n```sh\nxattr -dr com.apple.quarantine /Applications/Mizraj.app\n```'
                   printf '%s\n\n%s\n' "$body" "$note" > release-body.md
                   gh release edit "$TAG" --notes-file release-body.md

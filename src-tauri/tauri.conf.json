@@ -28,9 +28,8 @@
 		"targets": "all",
 		"createUpdaterArtifacts": true,
 		"macOS": {
-			"frameworks": [
-				"../target/libghostty/libghostty.dylib"
-			]
+			"signingIdentity": "-",
+			"frameworks": ["../target/libghostty/libghostty.dylib"]
 		},
 		"icon": [
 			"icons/32x32.png",

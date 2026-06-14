@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.1](https://github.com/NextNodeSolutions/mizraj/compare/v0.3.0...v0.3.1) (2026-06-14)
+
+
+### Bug Fixes
+
+* **release:** build + bundle libghostty-vt so macOS releases work ([7160f2d](https://github.com/NextNodeSolutions/mizraj/commit/7160f2d509ae032ac47da7ce745f1891d4caf75d))
+* **release:** build + bundle libghostty-vt so macOS releases work ([696409e](https://github.com/NextNodeSolutions/mizraj/commit/696409e4809a1b93238638c1fee9682e2517a74e))
+
 ## [0.3.0](https://github.com/NextNodeSolutions/mizraj/compare/v0.2.0...v0.3.0) (2026-06-14)
 
 

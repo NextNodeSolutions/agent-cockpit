@@ -10,6 +10,18 @@ A desktop cockpit for orchestrating Claude Code agents across projects — a loc
 
 Pre-alpha. Public for transparency; no support, no guarantees, no SLA. Issues and PRs may be ignored.
 
+## Install (macOS)
+
+Release builds are **unsigned and not notarized** (no Apple Developer ID). macOS
+quarantines them on download, so the first launch needs a one-time un-quarantine:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/Mizraj.app
+```
+
+The required `libghostty-vt` native library is bundled inside the `.app`
+(`Contents/Frameworks/`), so there is nothing else to install.
+
 ## Plan
 
 See [`docs/plans/2026-05-15-mizraj.html`](docs/plans/2026-05-15-mizraj.html) for the current build plan.

@@ -4,7 +4,14 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-git2 = "0.19"
+# default-features = false drops git2's `ssh` (libssh2) and `https` features,
+# which are the only things that pull in openssl-sys/libssh2-sys. mizraj-vcs uses
+# git2 for LOCAL repository operations only (open/init/diff/status/head/worktrees,
+# and reading the origin remote URL) — no network fetch/clone/push — so neither
+# transport feature is needed. Without this, the packaged macOS binary links
+# /opt/homebrew/opt/openssl@3/lib/lib{ssl,crypto}.3.dylib by ABSOLUTE path, which
+# does not exist on a user's Mac and makes the .app fail to launch.
+git2 = { version = "0.19", default-features = false }
 thiserror = "2"
 
 [dev-dependencies]

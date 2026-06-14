@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.3.2](https://github.com/NextNodeSolutions/mizraj/compare/v0.3.1...v0.3.2) (2026-06-14)
+
+
+### Bug Fixes
+
+* **icons:** swap the app icon to the sun/wave brand artwork ([597b3b1](https://github.com/NextNodeSolutions/mizraj/commit/597b3b17d508a61a271a6f93b105822a3ee21465))
+* **libghostty:** drive the &gt;=26.4 SDK guard via DEVELOPER_DIR, not SDKROOT ([3fb6a24](https://github.com/NextNodeSolutions/mizraj/commit/3fb6a24aa51fb067bd25ff2d517a4ee5bf15679d))
+* ship the real app icon + surface the macOS un-quarantine note ([f15cf90](https://github.com/NextNodeSolutions/mizraj/commit/f15cf90545b6761c9a28c7d1a0bee70b1e708be8))
+
 ## [0.3.1](https://github.com/NextNodeSolutions/mizraj/compare/v0.3.0...v0.3.1) (2026-06-14)
 
 

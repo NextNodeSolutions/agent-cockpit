@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.3](https://github.com/NextNodeSolutions/mizraj/compare/v0.3.2...v0.3.3) (2026-06-14)
+
+
+### Bug Fixes
+
+* **macos:** ad-hoc sign the app bundle to stop the "damaged" Gatekeeper error ([65ffe3e](https://github.com/NextNodeSolutions/mizraj/commit/65ffe3ed94991e7060369f2152b192d2af8c3b38))
+
 ## [0.3.2](https://github.com/NextNodeSolutions/mizraj/compare/v0.3.1...v0.3.2) (2026-06-14)
 
 

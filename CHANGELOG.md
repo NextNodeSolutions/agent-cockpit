@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.4](https://github.com/NextNodeSolutions/mizraj/compare/v0.3.3...v0.3.4) (2026-06-14)
+
+
+### Bug Fixes
+
+* **macos:** disable library validation so the bundled libghostty.dylib loads ([ea45d27](https://github.com/NextNodeSolutions/mizraj/commit/ea45d270020e6a441bf7c8c6944ee4735defee76))
+* **macos:** disable library validation so the bundled libghostty.dylib loads ([6110b36](https://github.com/NextNodeSolutions/mizraj/commit/6110b36d9e6d3b0ad4472a0ca6d1d29f1cb6f348))
+
 ## [0.3.3](https://github.com/NextNodeSolutions/mizraj/compare/v0.3.2...v0.3.3) (2026-06-14)
 
 

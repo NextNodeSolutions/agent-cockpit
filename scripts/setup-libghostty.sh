@@ -102,31 +102,39 @@ rm -rf "$PREFIX"
 # the same: it selects Xcode 26.3 on macos-26 (.github/workflows/release.yml).
 #
 # Guard: rather than fail with a wall of "undefined symbol" libc errors when the
-# active SDK is >= 26.4 (the default on an up-to-date Mac), detect that and point
-# Zig at any installed pre-26.4 macOS SDK via SDKROOT — which may be the default
-# of no toolchain (here the active dir's default is 26.x, but an older SDK lingers
-# beside it). Stop with an actionable message if none exists. A caller-set SDKROOT
-# is honored as-is, and an active SDK < 26.4 is left untouched.
-sdk_version_of() { plutil -extract Version raw "$1/SDKSettings.plist" 2>/dev/null || true; }
-if [ "$(uname -s)" = "Darwin" ] && [ -z "${SDKROOT:-}" ]; then
-  ACTIVE_SDK="$(sdk_version_of "$(xcrun --show-sdk-path 2>/dev/null || true)")"
+# active SDK is >= 26.4 (the default on an up-to-date Mac), detect that and switch
+# to a toolchain whose DEFAULT macOS SDK is pre-26.4 via DEVELOPER_DIR. We can't
+# use SDKROOT to point at a loose older SDK: ghostty resolves the SDK with
+# `xcrun --sdk macosx` (std LibCInstallation.findNative), which returns a
+# toolchain's default macOS SDK and ignores SDKROOT. So we probe the Command Line
+# Tools and every installed Xcode, pick one whose default SDK is < 26.4, and stop
+# with an actionable message if none exists. A caller-set DEVELOPER_DIR is honored
+# as-is, and an active SDK < 26.4 is left untouched.
+default_macos_sdk() {  # $1 = a developer dir → prints its default macOS SDK version
+  local p
+  for p in "$1/SDKs/MacOSX.sdk/SDKSettings.plist" \
+           "$1/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/SDKSettings.plist"; do
+    [ -f "$p" ] && { plutil -extract Version raw "$p" 2>/dev/null; return; }
+  done
+}
+if [ "$(uname -s)" = "Darwin" ] && [ -z "${DEVELOPER_DIR:-}" ]; then
+  ACTIVE_SDK="$(xcrun --show-sdk-version 2>/dev/null || true)"
   if [ -n "$ACTIVE_SDK" ] && version_ge "$ACTIVE_SDK" "26.4"; then
-    PICKED_SDK=""; PICKED_VER=""
-    for cand in \
-      /Library/Developer/CommandLineTools/SDKs/MacOSX*.sdk \
-      /Applications/Xcode*.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX*.sdk; do
-      [ -e "$cand/SDKSettings.plist" ] || continue
-      v="$(sdk_version_of "$cand")"
+    PICKED_DIR=""; PICKED_VER=""
+    for dir in /Library/Developer/CommandLineTools \
+               /Applications/Xcode*.app/Contents/Developer; do
+      [ -d "$dir" ] || continue
+      v="$(default_macos_sdk "$dir")"
       { [ -z "$v" ] || version_ge "$v" "26.4"; } && continue   # skip empty / broken (>=26.4)
       if [ -z "$PICKED_VER" ] || version_ge "$v" "$PICKED_VER"; then  # keep the highest pre-26.4
-        PICKED_SDK="$cand"; PICKED_VER="$v"
+        PICKED_DIR="$dir"; PICKED_VER="$v"
       fi
     done
-    if [ -n "$PICKED_SDK" ]; then
-      export SDKROOT="$PICKED_SDK"
-      log "active macOS SDK $ACTIVE_SDK cannot link with Zig $ZIG_VERSION (ziglang/zig#31658); using pre-26.4 SDK $PICKED_VER ($PICKED_SDK)"
+    if [ -n "$PICKED_DIR" ]; then
+      export DEVELOPER_DIR="$PICKED_DIR"
+      log "active macOS SDK $ACTIVE_SDK cannot link with Zig $ZIG_VERSION (ziglang/zig#31658); using toolchain with pre-26.4 SDK $PICKED_VER ($PICKED_DIR)"
     else
-      die "active macOS SDK $ACTIVE_SDK >= 26.4 cannot link with Zig $ZIG_VERSION (ziglang/zig#31658) and no pre-26.4 SDK was found. Install one (e.g. 'xcodes install 26.3', or older Command Line Tools), then re-run."
+      die "active macOS SDK $ACTIVE_SDK >= 26.4 cannot link with Zig $ZIG_VERSION (ziglang/zig#31658) and no toolchain with a pre-26.4 default SDK was found. Install one (e.g. 'xcodes install 26.3', then it is auto-detected), then re-run."
     fi
   fi
 fi

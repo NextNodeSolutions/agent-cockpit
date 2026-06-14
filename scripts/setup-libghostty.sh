@@ -29,13 +29,17 @@ VERSION_FILE="$TERM_SYS_DIR/vendor/VERSION"
 WORK_DIR="${LIBGHOSTTY_WORK_DIR:-$HOME/.cache/mizraj/libghostty}"
 INSTALL_DIR="$REPO_ROOT/target/libghostty"
 
-# Ghostty pins a strict Zig version in build.zig.zon. As of the pinned commit
-# this is 0.15.2 — bump here only when the pin moves and you've checked the new
-# build.zig.zon. A mismatched Zig will fail the build loudly, not silently.
+# Ghostty pins a strict Zig version in build.zig.zon via requireZig: the running
+# Zig's minor must EQUAL the pin's (0.16 is rejected; only 0.15.x with patch >= 2
+# is accepted). As of the pinned commit this is 0.15.2 — bump here only when the
+# ghostty pin moves and you've checked the new build.zig.zon. A mismatched Zig
+# fails the build loudly, not silently.
 ZIG_VERSION="${ZIG_VERSION:-0.15.2}"
 
 log() { printf '\033[1;36m[libghostty]\033[0m %s\n' "$*" >&2; }
 die() { printf '\033[1;31m[libghostty] ERROR:\033[0m %s\n' "$*" >&2; exit 1; }
+# version_ge A B → success (exit 0) iff version A >= version B (dotted, e.g. 26.4).
+version_ge() { [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -1)" = "$1" ]; }
 
 PRINT_ENV=0
 [ "${1:-}" = "--print-env" ] && PRINT_ENV=1
@@ -86,15 +90,46 @@ log "ghostty checked out at $(git -C "$GHOSTTY_SRC" rev-parse --short HEAD)"
 PREFIX="$WORK_DIR/prefix"
 rm -rf "$PREFIX"
 
-# PREREQUISITE on macOS (ziglang/zig #31658): Zig 0.15.2 — the version ghostty
-# pins — cannot link against the macOS 26.4 SDK (Command Line Tools 26.4): its
-# libSystem.tbd carries arm64e entries that aarch64-macos doesn't match, so
-# every libc symbol comes up undefined. The fix (PR #31673) is on Zig's 0.15.x
-# branch but NOT in the 2025-10-11 0.15.2 release binary, and ghostty requires
-# exactly 0.15.2, so bumping Zig is not an option. Resolution: use Command Line
-# Tools 26.3 or earlier (xcode-select / developer.apple.com downloads). With a
-# pre-26.4 SDK active, the build below is a plain native build. The reproducible
-# CI/bundle build is expected to cross-compile and sidesteps this entirely.
+# PREREQUISITE on macOS (ziglang/zig#31658): the released Zig 0.15.2 binary —
+# the version ghostty's 0.15.x pin requires — cannot link against the macOS 26.4
+# SDK (Command Line Tools / Xcode 26.4): its libSystem.tbd carries arm64e entries
+# that aarch64-macos doesn't match, so every libc symbol comes up undefined. The
+# fix (PR #31673) landed on Zig's 0.15.x branch but was never cut as a release
+# binary, and ghostty's requireZig rejects 0.16, so bumping Zig is not an option
+# until ghostty rolls forward. Resolution: build against a pre-26.4 SDK (Command
+# Line Tools / Xcode 26.3 or earlier — xcode-select / developer.apple.com). With
+# a pre-26.4 SDK active, the build below is a plain native build. CI does exactly
+# the same: it selects Xcode 26.3 on macos-26 (.github/workflows/release.yml).
+#
+# Guard: rather than fail with a wall of "undefined symbol" libc errors when the
+# active SDK is >= 26.4 (the default on an up-to-date Mac), detect that and point
+# Zig at any installed pre-26.4 macOS SDK via SDKROOT — which may be the default
+# of no toolchain (here the active dir's default is 26.x, but an older SDK lingers
+# beside it). Stop with an actionable message if none exists. A caller-set SDKROOT
+# is honored as-is, and an active SDK < 26.4 is left untouched.
+sdk_version_of() { plutil -extract Version raw "$1/SDKSettings.plist" 2>/dev/null || true; }
+if [ "$(uname -s)" = "Darwin" ] && [ -z "${SDKROOT:-}" ]; then
+  ACTIVE_SDK="$(sdk_version_of "$(xcrun --show-sdk-path 2>/dev/null || true)")"
+  if [ -n "$ACTIVE_SDK" ] && version_ge "$ACTIVE_SDK" "26.4"; then
+    PICKED_SDK=""; PICKED_VER=""
+    for cand in \
+      /Library/Developer/CommandLineTools/SDKs/MacOSX*.sdk \
+      /Applications/Xcode*.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX*.sdk; do
+      [ -e "$cand/SDKSettings.plist" ] || continue
+      v="$(sdk_version_of "$cand")"
+      { [ -z "$v" ] || version_ge "$v" "26.4"; } && continue   # skip empty / broken (>=26.4)
+      if [ -z "$PICKED_VER" ] || version_ge "$v" "$PICKED_VER"; then  # keep the highest pre-26.4
+        PICKED_SDK="$cand"; PICKED_VER="$v"
+      fi
+    done
+    if [ -n "$PICKED_SDK" ]; then
+      export SDKROOT="$PICKED_SDK"
+      log "active macOS SDK $ACTIVE_SDK cannot link with Zig $ZIG_VERSION (ziglang/zig#31658); using pre-26.4 SDK $PICKED_VER ($PICKED_SDK)"
+    else
+      die "active macOS SDK $ACTIVE_SDK >= 26.4 cannot link with Zig $ZIG_VERSION (ziglang/zig#31658) and no pre-26.4 SDK was found. Install one (e.g. 'xcodes install 26.3', or older Command Line Tools), then re-run."
+    fi
+  fi
+fi
 
 log "building libghostty-vt (zig build -Demit-lib-vt) — slow on first run"
 # The build emits the dylib early, then a final `install` step assembles an

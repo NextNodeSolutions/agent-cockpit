@@ -37,19 +37,31 @@ jobs:
     publish-tauri:
         needs: release-please
         if: ${{ needs.release-please.outputs.release_created == 'true' || github.event_name == 'workflow_dispatch' }}
-        # Pinned to macos-15 (Apple Silicon, Xcode 16 / SDK 15.x) on purpose, NOT
-        # macos-latest: ghostty pins Zig 0.15.2, and Zig 0.15.2 cannot link
-        # against the macOS 26.4 SDK (ziglang/zig#31658). When GitHub migrates
-        # macos-latest to macos-26 that SDK would silently break the libghostty
-        # build, and we can't bump Zig (the pin forbids it). macos-15 keeps the
-        # build on a pre-26.4 SDK. The dylib it produces is arm64, matching the
-        # arm64 app binary tauri-action builds on this runner.
-        runs-on: macos-15
+        # Runs on macos-26 (Apple Silicon) but pinned to a pre-26.4 Xcode in the
+        # step below, NOT the image default (Xcode 26.4 / SDK 26.4). ghostty
+        # pins Zig to the 0.15.x line (build.zig.zon requireZig: the running
+        # Zig's minor must equal 0.15, so 0.16 is rejected), and the released
+        # Zig 0.15.2 binary cannot link the macOS 26.4 SDK — its libSystem.tbd
+        # carries arm64e entries aarch64-macos doesn't match, so every libc
+        # symbol comes up undefined (ziglang/zig#31658). The fix (PR #31673)
+        # landed on Zig's 0.15.x branch but was never cut as a release binary,
+        # and ghostty hasn't rolled forward to 0.16, so bumping Zig is not an
+        # option yet. ghostty's own CI works around this identically: select
+        # Xcode 26.3. The dylib this produces is arm64, matching the arm64 app
+        # binary tauri-action builds on this runner. Revisit (macos-latest +
+        # Zig 0.16) when the vendored ghostty pin moves to a 0.16-capable commit.
+        runs-on: macos-26
 
         steps:
             - uses: actions/checkout@v4
               with:
                   ref: ${{ inputs.tag || needs.release-please.outputs.tag_name }}
+
+            # Select a pre-26.4 macOS SDK: Zig 0.15.2 cannot link the 26.4 SDK
+            # (ziglang/zig#31658, see runs-on comment). macos-26 ships Xcode 26.3
+            # alongside the 26.4 default; this mirrors ghostty's own release CI.
+            - name: Select pre-26.4 SDK for Zig 0.15.2 (ziglang/zig#31658)
+              run: sudo xcode-select -s /Applications/Xcode_26.3.app
 
             - uses: pnpm/action-setup@v4
 
@@ -82,7 +94,7 @@ jobs:
               uses: actions/cache@v4
               with:
                   path: target/libghostty
-                  key: libghostty-${{ runner.os }}-${{ runner.arch }}-zig0.15.2-${{ steps.ghostty.outputs.sha }}
+                  key: libghostty-${{ runner.os }}-${{ runner.arch }}-zig0.15.2-xcode26.3-${{ steps.ghostty.outputs.sha }}
 
             - name: Build libghostty-vt
               if: steps.libghostty-cache.outputs.cache-hit != 'true'

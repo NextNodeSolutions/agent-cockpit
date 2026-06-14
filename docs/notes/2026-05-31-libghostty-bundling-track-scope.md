@@ -9,9 +9,12 @@
 > vérifié de bout en bout (dylib dans `.app/Contents/Frameworks/`, rpath
 > `@executable_path/../Frameworks`, dyld charge la copie bundlée au lancement).
 >
-> - CI release (`.github/workflows/release.yml`, job `publish-tauri`, pin
->   `macos-15`) build le dylib via `scripts/setup-libghostty.sh` avant
->   tauri-action, caché sur le SHA du pin.
+> - CI release (`.github/workflows/release.yml`, job `publish-tauri`, runner
+>   `macos-26` avec Xcode 26.3 sélectionné — workaround `ziglang/zig#31658`, cf.
+>   commentaire `runs-on`) build le dylib via `scripts/setup-libghostty.sh` avant
+>   tauri-action, caché sur le SHA du pin. Zig 0.15.2 ne lie pas le SDK 26.4 et
+>   ghostty refuse 0.16 (`requireZig`) → on reste sur un SDK pré-26.4, comme la
+>   CI ghostty. À revoir (`macos-latest` + Zig 0.16) au bump du commit ghostty.
 > - Bundle Tauri via `bundle.macOS.frameworks` + rpath dans `.cargo/config.toml`.
 > - Renommage `libghostty-vt`→`libghostty` : **conservé** (le script copie +
 >   `install_name_tool -id`), CI le réutilise.

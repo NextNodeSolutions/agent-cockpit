@@ -10,8 +10,10 @@ import type { SessionState } from '@/features/sessions/sessions'
 
 const STATUS_ORDER: Readonly<Record<SessionDisplayStatus, number>> = {
 	running: 0,
-	review: 1,
-	failed: 2,
+	needInput: 1,
+	review: 2,
+	idle: 3,
+	failed: 4,
 }
 
 // Active work first, then most recently started — the cmux "what's hot" wall.

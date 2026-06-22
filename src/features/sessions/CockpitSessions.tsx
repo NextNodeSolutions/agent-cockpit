@@ -93,7 +93,7 @@ const SessionRow = ({
 			openSession(session)
 		}}
 	>
-		<span style={{ marginTop: 5 }}>
+		<span className="lr-dot">
 			<SDot s={sessionDotKind(session)} />
 		</span>
 		<div style={{ minWidth: 0 }}>

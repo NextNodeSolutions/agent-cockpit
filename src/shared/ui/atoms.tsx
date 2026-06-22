@@ -5,8 +5,8 @@
 import type { SessionDisplayStatus } from '@/features/sessions/displayStatus'
 import { DISPLAY_STATUS_LABEL } from '@/features/sessions/displayStatus'
 
-/** The four states a status dot can show (see .sdot-* in components.css). */
-export type SDotKind = 'run' | 'rev' | 'done' | 'fail'
+/** The status flavors a dot can show (see .sdot-* in components.css). */
+export type SDotKind = 'run' | 'idle' | 'input' | 'rev' | 'done' | 'fail'
 
 type SDotProps = {
 	s: SDotKind
@@ -18,6 +18,8 @@ export const SDot = ({ s }: SDotProps): React.JSX.Element => (
 
 const TAG_CLASS: Readonly<Record<SessionDisplayStatus, string>> = {
 	running: 'tag tag-run',
+	idle: 'tag tag-idle',
+	needInput: 'tag tag-input',
 	review: 'tag tag-rev',
 	failed: 'tag tag-fail',
 }

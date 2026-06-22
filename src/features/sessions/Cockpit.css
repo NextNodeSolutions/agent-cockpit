@@ -11,7 +11,7 @@
 	display: grid;
 	grid-template-columns: 248px 1fr 320px;
 	gap: var(--sp-gap);
-	padding: 14px var(--sp-panel) var(--sp-panel);
+	padding: var(--sp-gap) var(--sp-panel) var(--sp-panel);
 }
 /* Stagger indexes the design inked as inline --si custom props; React can't
    set custom props without a banned cast, so position carries the index. */
@@ -54,7 +54,7 @@
 	text-decoration: none;
 }
 .fc-sess-foot {
-	padding: 9px 14px;
+	padding: 9px var(--sp-card);
 	border-top: 1px solid var(--border);
 	font-size: var(--fs-xs);
 	color: var(--text-3);
@@ -81,7 +81,7 @@
 	display: flex;
 	align-items: center;
 	gap: 10px;
-	padding: 9px 12px;
+	padding: 9px var(--sp-card);
 	border-bottom: 1px solid var(--term-border);
 	flex: none;
 }

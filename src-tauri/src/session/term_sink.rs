@@ -4,8 +4,8 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use mizraj_term::{
-    encode_paste, Dirty, KeyEncoder, MouseEncoder, MouseInput, RenderState, ScrollViewport,
-    Terminal,
+    encode_paste, ColorQueryResponder, DefaultColors, Dirty, KeyEncoder, MouseEncoder, MouseInput,
+    RenderState, ScrollViewport, Terminal,
 };
 use tauri::async_runtime::Sender as PtyInputSender;
 use tauri::{AppHandle, Emitter, Runtime};
@@ -81,6 +81,7 @@ impl TermSink {
         session_id: SessionId,
         pty_input: PtyInputSender<Vec<u8>>,
         scrollback_lines: usize,
+        colors: DefaultColors,
     ) -> Self {
         let title_app = app.clone();
         let title_sid = session_id.clone();
@@ -100,6 +101,7 @@ impl TermSink {
             session_id,
             pty_input,
             scrollback_lines,
+            colors,
         )
     }
 
@@ -118,6 +120,7 @@ impl TermSink {
             session_id,
             pty_input,
             mizraj_term::DEFAULT_MAX_SCROLLBACK_LINES,
+            DefaultColors::default(),
         )
     }
 
@@ -127,6 +130,7 @@ impl TermSink {
         session_id: SessionId,
         pty_input: PtyInputSender<Vec<u8>>,
         scrollback_lines: usize,
+        colors: DefaultColors,
     ) -> Self
     where
         E: Fn(CellFrame) + Send + 'static,
@@ -134,7 +138,15 @@ impl TermSink {
     {
         let (tx, rx) = mpsc::channel::<RenderInput>();
         thread::spawn(move || {
-            render_loop(emit, on_title, session_id, rx, pty_input, scrollback_lines)
+            render_loop(
+                emit,
+                on_title,
+                session_id,
+                rx,
+                pty_input,
+                scrollback_lines,
+                colors,
+            )
         });
         Self { tx: Mutex::new(tx) }
     }
@@ -220,9 +232,16 @@ fn render_loop<E: Fn(CellFrame), T: Fn(Option<String>)>(
     rx: Receiver<RenderInput>,
     pty_input: PtyInputSender<Vec<u8>>,
     scrollback_lines: usize,
+    colors: DefaultColors,
 ) {
-    let Some(state) = RenderLoop::init(emit, on_title, session_id, pty_input, scrollback_lines)
-    else {
+    let Some(state) = RenderLoop::init(
+        emit,
+        on_title,
+        session_id,
+        pty_input,
+        scrollback_lines,
+        colors,
+    ) else {
         return;
     };
     state.run(&rx);
@@ -256,6 +275,9 @@ struct RenderLoop<E: Fn(CellFrame), T: Fn(Option<String>)> {
     // The last OSC title broadcast, to emit only on change.
     last_title: Option<String>,
     session_id: SessionId,
+    // Answers OSC 10/11/12 color queries from the seeded theme so a probing
+    // TUI (Claude Code, vim) detects the real light/dark terminal (TP-color).
+    color_responder: ColorQueryResponder,
 }
 
 impl<E: Fn(CellFrame), T: Fn(Option<String>)> RenderLoop<E, T> {
@@ -265,6 +287,7 @@ impl<E: Fn(CellFrame), T: Fn(Option<String>)> RenderLoop<E, T> {
         session_id: SessionId,
         pty_input: PtyInputSender<Vec<u8>>,
         scrollback_lines: usize,
+        colors: DefaultColors,
     ) -> Option<Self> {
         let sid = session_id.as_str();
         let mut terminal = match Terminal::with_scrollback(
@@ -303,6 +326,12 @@ impl<E: Fn(CellFrame), T: Fn(Option<String>)> RenderLoop<E, T> {
         })) {
             tracing::error!(session_id = sid, error = %err, "pty write-back install failed; query responses off");
         }
+        // Seed the resolved theme so libghostty answers color-scheme queries
+        // (DSR ?996n) truthfully; OSC 10/11/12 color queries — which libghostty's
+        // VT core does not answer — are handled by `color_responder` below.
+        if let Err(err) = terminal.set_default_colors(&colors) {
+            tracing::warn!(session_id = sid, error = %err, "seeding terminal theme colors failed");
+        }
 
         Some(Self {
             terminal,
@@ -318,6 +347,7 @@ impl<E: Fn(CellFrame), T: Fn(Option<String>)> RenderLoop<E, T> {
             on_title,
             last_title: None,
             session_id,
+            color_responder: ColorQueryResponder::new(colors),
         })
     }
 
@@ -394,6 +424,12 @@ impl<E: Fn(CellFrame), T: Fn(Option<String>)> RenderLoop<E, T> {
         let sid = self.session_id.as_str();
         match input {
             RenderInput::Bytes(bytes) => {
+                // Sniff for OSC color queries and answer them before feeding the
+                // core, so a probing TUI learns the real background/foreground.
+                let reply = self.color_responder.observe(&bytes);
+                if !reply.is_empty() {
+                    let _ = self.pty_input.try_send(reply);
+                }
                 if let Err(err) = self.terminal.feed(&bytes) {
                     tracing::warn!(session_id = sid, error = %err, "terminal feed failed");
                 }
@@ -659,6 +695,47 @@ mod tests {
         (sink, frame_rx, pty_rx)
     }
 
+    /// Poll the PTY channel for one message within [`FRAME_WAIT`] without
+    /// risking a hang (the tokio receiver has no blocking timeout).
+    fn recv_pty(rx: &mut tauri::async_runtime::Receiver<Vec<u8>>) -> Option<Vec<u8>> {
+        let deadline = Instant::now() + FRAME_WAIT;
+        loop {
+            match rx.try_recv() {
+                Ok(bytes) => return Some(bytes),
+                Err(_) if Instant::now() < deadline => thread::sleep(Duration::from_millis(5)),
+                Err(_) => return None,
+            }
+        }
+    }
+
+    #[test]
+    fn osc_background_query_is_answered_to_the_pty() {
+        let (frame_tx, _frame_rx) = mpsc::channel::<CellFrame>();
+        let (pty_tx, mut pty_rx) = tauri::async_runtime::channel::<Vec<u8>>(8);
+        let sink = TermSink::with_emitters(
+            move |frame| {
+                let _ = frame_tx.send(frame);
+            },
+            |_| {},
+            SessionId::new(),
+            pty_tx,
+            mizraj_term::DEFAULT_MAX_SCROLLBACK_LINES,
+            DefaultColors {
+                background: Some(mizraj_term::Rgb::new(0xef, 0xf1, 0xf5)),
+                foreground: None,
+                cursor: None,
+                scheme: mizraj_term::ColorScheme::Light,
+            },
+        );
+
+        // A child probing the background (OSC 11 ; ?) gets the seeded Latte color
+        // back on the PTY, so it can pick its light variant.
+        sink.write(b"\x1b]11;?\x07");
+
+        let reply = recv_pty(&mut pty_rx).expect("OSC 11 reply on the pty");
+        assert_eq!(reply, b"\x1b]11;rgb:efef/f1f1/f5f5\x07");
+    }
+
     #[test]
     fn osc_title_changes_are_broadcast_once_per_change() {
         let (title_tx, title_rx) = mpsc::channel::<Option<String>>();
@@ -671,6 +748,7 @@ mod tests {
             SessionId::new(),
             pty_tx,
             mizraj_term::DEFAULT_MAX_SCROLLBACK_LINES,
+            DefaultColors::default(),
         );
 
         sink.write(b"\x1b]2;mon-titre\x07");

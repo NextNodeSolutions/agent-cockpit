@@ -60,7 +60,12 @@ where
 {
     let binary_path = path::resolve(binary)?;
     let cwd_path = PathBuf::from(cwd);
-    let env: HashMap<String, String> = HashMap::new();
+    // Advertise the resolved terminal's light/dark polarity so a child that
+    // reads COLORFGBG (rather than querying OSC 11) still picks the right theme.
+    let env: HashMap<String, String> = HashMap::from([(
+        "COLORFGBG".to_string(),
+        crate::ghostty::session_colorfgbg().to_string(),
+    )]);
 
     let id = manager
         .create_session(binary_path, cwd_path.clone(), env, sink_factory)
@@ -131,11 +136,17 @@ pub async fn session_create<R: Runtime>(
         .await
         .map_err(SessionError::Database)?;
     let scrollback_lines = crate::ghostty::scrollback_lines();
+    let colors = crate::ghostty::session_terminal_colors();
     session_create_inner(&manager, &pool, &binary, cwd, move |id, pty_input| {
         vec![
             Arc::new(TauriEventSink::new(app.clone(), id.clone())) as Arc<dyn OutputSink>,
-            Arc::new(TermSink::new(app, id.clone(), pty_input, scrollback_lines))
-                as Arc<dyn OutputSink>,
+            Arc::new(TermSink::new(
+                app,
+                id.clone(),
+                pty_input,
+                scrollback_lines,
+                colors,
+            )) as Arc<dyn OutputSink>,
         ]
     })
     .await

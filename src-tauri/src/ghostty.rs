@@ -134,6 +134,46 @@ pub fn scrollback_lines() -> usize {
     usize::try_from(lines).unwrap_or(mizraj_term::DEFAULT_MAX_SCROLLBACK_LINES)
 }
 
+/// Map a resolved config color to a terminal RGB, dropping the non-RGB forms
+/// (named X11 colors — not resolved yet — and the `cell-*` runtime specials),
+/// which leave the slot unset so libghostty keeps its built-in default.
+fn term_rgb(color: Option<mizraj_config::Color>) -> Option<mizraj_term::Rgb> {
+    match color {
+        Some(mizraj_config::Color::Rgb(rgb)) => Some(mizraj_term::Rgb::new(rgb.r, rgb.g, rgb.b)),
+        _ => None,
+    }
+}
+
+/// Resolve the default theme colors a newly spawned session should advertise:
+/// the background/foreground/cursor a probing TUI reads (OSC 10/11/12) to pick
+/// its light/dark variant, plus the implied color scheme (DSR `?996n`).
+///
+/// Resolves with the dark side of any `light:…,dark:…` theme — a session is
+/// spawned without the live system appearance to hand, and the common
+/// `theme = <name>` form is appearance-independent (resolves identically either
+/// way). A future change can thread the frontend's appearance through here.
+pub fn session_terminal_colors() -> mizraj_term::DefaultColors {
+    let config = load(&load_options(Appearance::Dark));
+    let background = term_rgb(config.background);
+    mizraj_term::DefaultColors {
+        background,
+        foreground: term_rgb(config.foreground),
+        cursor: term_rgb(config.cursor_color),
+        scheme: mizraj_term::ColorScheme::from_background(background),
+    }
+}
+
+/// The `COLORFGBG` value to advertise the resolved terminal as light or dark,
+/// for tools that read the env var instead of querying OSC 11 (the de-facto
+/// `fg;bg` convention — a light `bg` index, here `15`, means a light terminal;
+/// `0` a dark one). A belt-and-suspenders complement to the OSC 11 responder.
+pub fn session_colorfgbg() -> &'static str {
+    match session_terminal_colors().scheme {
+        mizraj_term::ColorScheme::Light => "0;15",
+        mizraj_term::ColorScheme::Dark => "15;0",
+    }
+}
+
 /// Load the user's effective Ghostty config for the given system appearance
 /// (`"light"` / `"dark"`). Never fails on a bad config — problems ride along in
 /// `diagnostics` so the terminal still starts.

@@ -84,6 +84,37 @@ pub fn capture_login_shell_path() -> Option<String> {
     }
 }
 
+/// How long to wait for the login shell's PATH before painting the window
+/// anyway. A healthy rc answers in milliseconds; a hanging one (network-mounted
+/// home, an rc that blocks on I/O or stdin) must not stall startup past this.
+#[cfg(target_os = "macos")]
+const PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
+
+/// [`capture_login_shell_path`] bounded by [`PROBE_TIMEOUT`], run on a worker
+/// thread so a hanging shell rc can never block the Tauri `setup` thread that
+/// must return before the window paints. Returns `None` on timeout (the probe
+/// is abandoned, the caller keeps the inherited PATH) as well as on failure.
+#[cfg(target_os = "macos")]
+pub fn capture_login_shell_path_bounded() -> Option<String> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    // Detached: if the probe outlives the timeout, its send lands on a dropped
+    // receiver and is harmlessly ignored, and the thread exits once the shell
+    // finally returns.
+    std::thread::spawn(move || {
+        let _ = tx.send(capture_login_shell_path());
+    });
+    match rx.recv_timeout(PROBE_TIMEOUT) {
+        Ok(path) => path,
+        Err(_) => {
+            tracing::warn!(
+                timeout_ms = PROBE_TIMEOUT.as_millis() as u64,
+                "login-shell PATH probe timed out; continuing without PATH enrichment"
+            );
+            None
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -54,8 +54,11 @@ pub fn run() {
                     project::watcher::watch_and_emit(&watchers, &handle, &repo);
                 }
             });
+            // Bounded by a timeout on a worker thread: a user's shell rc that
+            // hangs (network-mounted home, an rc blocking on I/O) must never
+            // stall `setup`, which has to return before the window can paint.
             #[cfg(target_os = "macos")]
-            if let Some(path) = session::path::capture_login_shell_path() {
+            if let Some(path) = session::path::capture_login_shell_path_bounded() {
                 std::env::set_var("PATH", path);
             }
             // Point the Ghostty config loader at the app-bundled theme corpus so

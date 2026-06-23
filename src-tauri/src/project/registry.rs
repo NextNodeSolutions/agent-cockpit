@@ -113,10 +113,21 @@ pub struct Registry {
 
 impl Registry {
     /// Load the registry from `file_path`; a missing file is an empty registry.
+    ///
+    /// A *corrupt* file (interrupted write, sync-client conflict) must not brick
+    /// launch: setup propagates a load error all the way to `exit(1)` with no
+    /// window. An absent file already means "empty registry", so an unparseable
+    /// one is treated the same — but quarantined first (see [`quarantine_corrupt`])
+    /// so the user's project list is preserved for diagnostics, never silently lost.
     pub fn load(file_path: &Path) -> Result<Self, String> {
         let projects = match std::fs::read_to_string(file_path) {
-            Ok(raw) => serde_json::from_str(&raw)
-                .map_err(|err| format!("parse {}: {err}", file_path.display()))?,
+            Ok(raw) => match serde_json::from_str(&raw) {
+                Ok(projects) => projects,
+                Err(err) => {
+                    quarantine_corrupt(file_path, &err);
+                    Vec::new()
+                }
+            },
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => Vec::new(),
             Err(err) => return Err(format!("read {}: {err}", file_path.display())),
         };
@@ -167,8 +178,44 @@ impl Registry {
         }
         let raw = serde_json::to_string_pretty(&self.projects)
             .map_err(|err| format!("serialize registry: {err}"))?;
-        std::fs::write(&self.file_path, raw)
-            .map_err(|err| format!("write {}: {err}", self.file_path.display()))
+        // Write-then-rename so an interrupted write (power loss, OOM kill, a
+        // sync client) can never leave a half-written registry that aborts the
+        // next launch: rename is atomic within a filesystem, so a reader sees
+        // either the old file or the complete new one, never a torn one.
+        let tmp = self.file_path.with_extension("json.tmp");
+        std::fs::write(&tmp, raw).map_err(|err| format!("write {}: {err}", tmp.display()))?;
+        std::fs::rename(&tmp, &self.file_path).map_err(|err| {
+            format!(
+                "rename {} -> {}: {err}",
+                tmp.display(),
+                self.file_path.display()
+            )
+        })
+    }
+}
+
+/// Move an unparseable registry aside to `<file>.corrupt.<unix_millis>` so a
+/// launch proceeds with an empty registry while preserving the bad file for
+/// diagnostics. Best-effort: a failed rename is logged, never fatal.
+fn quarantine_corrupt(file_path: &Path, err: &serde_json::Error) {
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_millis())
+        .unwrap_or(0);
+    let mut backup = file_path.as_os_str().to_owned();
+    backup.push(format!(".corrupt.{stamp}"));
+    let backup = PathBuf::from(backup);
+    match std::fs::rename(file_path, &backup) {
+        Ok(()) => tracing::warn!(
+            error = %err,
+            backup = %backup.display(),
+            "project registry was corrupt; quarantined it and started empty"
+        ),
+        Err(rename_err) => tracing::error!(
+            error = %err,
+            rename_error = %rename_err,
+            "project registry was corrupt and could not be quarantined; started empty"
+        ),
     }
 }
 
@@ -188,13 +235,25 @@ mod tests {
     }
 
     #[test]
-    fn a_corrupt_file_is_a_load_error_not_a_silent_wipe() {
+    fn a_corrupt_file_loads_empty_and_is_quarantined_not_wiped() {
         let dir = tempfile::tempdir().expect("tempdir");
         let file = dir.path().join("projects.json");
         std::fs::write(&file, "not json").expect("write corrupt file");
 
-        let err = Registry::load(&file).expect_err("corrupt file should fail");
-        assert!(err.starts_with("parse "), "got: {err}");
+        // Launch must survive a corrupt registry: load succeeds, empty.
+        let registry = Registry::load(&file).expect("corrupt file must not fail load");
+        assert!(registry.list().is_empty());
+
+        // The bad file is preserved (quarantined), not silently destroyed.
+        let quarantined: Vec<_> = std::fs::read_dir(dir.path())
+            .expect("read dir")
+            .filter_map(|entry| entry.ok())
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .filter(|name| name.starts_with("projects.json.corrupt."))
+            .collect();
+        assert_eq!(quarantined.len(), 1, "expected one quarantine file");
+        // The original path is freed so the next persist writes a clean file.
+        assert!(!file.exists(), "corrupt file should have been moved aside");
     }
 
     #[test]

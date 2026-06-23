@@ -42,6 +42,8 @@ describe('DISPLAY_STATUS_LABEL', () => {
 	it('labels every display status', () => {
 		expect(DISPLAY_STATUS_LABEL).toEqual({
 			running: 'running',
+			idle: 'idle',
+			needInput: 'needs input',
 			review: 'needs review',
 			failed: 'failed',
 		})

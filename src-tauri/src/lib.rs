@@ -59,6 +59,25 @@ pub fn run() {
             if let Some(path) = session::path::capture_login_shell_path() {
                 std::env::set_var("PATH", path);
             }
+            // Point the Ghostty config loader at the app-bundled theme corpus so
+            // `theme = <name>` resolves without an external Ghostty install. In
+            // `tauri dev` the resource dir is not populated, so fall back to the
+            // in-tree corpus — named themes then resolve in development too.
+            match app.path().resource_dir() {
+                Ok(resource_dir) => {
+                    let bundled = resource_dir.join("ghostty-themes");
+                    let themes_dir = if bundled.is_dir() {
+                        bundled
+                    } else {
+                        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                            .join("resources/ghostty-themes")
+                    };
+                    ghostty::set_bundled_themes_dir(themes_dir);
+                }
+                Err(err) => {
+                    tracing::warn!(error = %err, "resource dir unresolved: bundled Ghostty themes disabled");
+                }
+            }
             // No database is opened here: the progress.db is per-project, so it
             // is resolved and opened lazily when a project becomes active (see
             // `set_active_project`). Until then the `Db` state holds no pool.

@@ -27,6 +27,9 @@
 		"active": true,
 		"targets": "all",
 		"createUpdaterArtifacts": true,
+		"resources": {
+			"resources/ghostty-themes/*": "ghostty-themes/"
+		},
 		"macOS": {
 			"signingIdentity": "-",
 			"entitlements": "Entitlements.plist",

@@ -9,7 +9,7 @@ mod dto;
 mod watch;
 
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 
 use mizraj_config::{load, Appearance, LoadOptions};
 use notify::RecommendedWatcher;
@@ -17,6 +17,18 @@ use tauri::{AppHandle, Emitter, Runtime};
 
 use dto::{build_dto, GhosttyConfigDto};
 use watch::{spawn_config_watcher, GHOSTTY_CONFIG_CHANGED_EVENT};
+
+/// Absolute path to the app-bundled Ghostty theme corpus, set once at startup
+/// from the Tauri resource dir (see [`set_bundled_themes_dir`]). The corpus is
+/// vendored (`resources/ghostty-themes/`) so `theme = <name>` resolves on any
+/// Mac with no dependency on an installed Ghostty — mizraj is self-contained.
+static BUNDLED_THEMES_DIR: OnceLock<PathBuf> = OnceLock::new();
+
+/// Register the app-bundled theme directory. Called once during Tauri `setup`
+/// with `<resource_dir>/ghostty-themes`; later calls are ignored.
+pub fn set_bundled_themes_dir(dir: PathBuf) {
+    let _ = BUNDLED_THEMES_DIR.set(dir);
+}
 
 /// The directory that holds `$XDG_CONFIG_HOME/ghostty` (defaulting XDG to
 /// `$HOME/.config`).
@@ -54,26 +66,19 @@ fn user_config_dirs() -> Vec<PathBuf> {
     dirs
 }
 
-/// Resolve the Ghostty config files (load order) and theme search dirs from the
-/// environment. macOS adds the Application Support locations and the installed
-/// Ghostty app's bundled themes; Linux adds the system theme dir.
+/// Resolve the Ghostty config files (load order) and theme search dirs. The
+/// user's own `themes/` dirs come first, then the app-bundled corpus
+/// ([`BUNDLED_THEMES_DIR`]) so a named theme always resolves self-contained —
+/// no `/Applications/Ghostty.app` or other external install is consulted.
 fn load_options(appearance: Appearance) -> LoadOptions {
     let config_dirs = user_config_dirs();
     let mut theme_dirs: Vec<PathBuf> = config_dirs.iter().map(|dir| dir.join("themes")).collect();
 
-    #[cfg(target_os = "macos")]
-    {
-        // Best-effort secondary source for a default Ghostty install. This is a
-        // fallback only: M1 bundles the theme corpus inside the app so parity
-        // does not depend on an external Ghostty install or its exact location
-        // (Homebrew Cask, a moved app, … are not covered by this single path).
-        theme_dirs.push(PathBuf::from(
-            "/Applications/Ghostty.app/Contents/Resources/ghostty/themes",
-        ));
-    }
-    #[cfg(target_os = "linux")]
-    {
-        theme_dirs.push(PathBuf::from("/usr/share/ghostty/themes"));
+    // The vendored corpus makes `theme = <name>` resolve identically on every
+    // Mac. Pushed AFTER the user dirs so a user's own theme of the same name
+    // still wins. Absent only in a dev build where the resource dir is unset.
+    if let Some(bundled) = BUNDLED_THEMES_DIR.get() {
+        theme_dirs.push(bundled.clone());
     }
 
     let config_files = config_dirs

@@ -1,26 +1,25 @@
 import { sessionDisplayStatus } from '@/features/sessions/displayStatus'
+import { useSessionActivity } from '@/features/sessions/useSessionActivity'
 import { useSessions } from '@/features/sessions/useSessions'
 import { SDot } from '@/shared/ui/atoms'
 
 import { missionControlHref, navigate } from './router'
 
 /**
- * The topbar's live pulse: how many agents run right now, how many wait on
- * the user — each pill deep-links mission control pre-filtered.
+ * The topbar's live pulse: how many agents are working right now, how many are
+ * idle — each pill deep-links mission control pre-filtered.
  */
 export const StatusCluster = (): React.JSX.Element => {
 	const sessions = useSessions()
-	const runningCount = sessions.filter(
-		session => sessionDisplayStatus(session) === 'running',
-	).length
-	const reviewCount = sessions.filter(
-		session => sessionDisplayStatus(session) === 'review',
-	).length
+	const activityFor = useSessionActivity()
+	const statuses = sessions.map(session =>
+		sessionDisplayStatus(activityFor(session.id)),
+	)
+	const runningCount = statuses.filter(status => status === 'running').length
+	const idleCount = statuses.filter(status => status === 'idle').length
 
 	// TODO(subagents): surface the Claude subagent count ('+N sub' chip)
 	// when the backend reports a subagent feed per session.
-	// TODO(merged): no merge tracking; omit the merged filter/count in shell
-	// surfaces until the backend records merged branches.
 	return (
 		<div className="mz-status">
 			<button
@@ -35,13 +34,13 @@ export const StatusCluster = (): React.JSX.Element => {
 			</button>
 			<button
 				type="button"
-				className="mz-statbtn mz-statbtn-rev"
-				title="Jump to agents waiting on you"
-				onClick={() => navigate(missionControlHref('review'))}
+				className="mz-statbtn"
+				title="Jump to idle agents"
+				onClick={() => navigate(missionControlHref('idle'))}
 			>
-				<SDot s="rev" />
-				<b>{reviewCount}</b>
-				<span className="sl">to review</span>
+				<SDot s="idle" />
+				<b>{idleCount}</b>
+				<span className="sl">idle</span>
 			</button>
 		</div>
 	)

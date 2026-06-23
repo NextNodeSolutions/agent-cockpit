@@ -10,10 +10,6 @@ import {
 import type { PlanEntry } from '@/features/plans/plans'
 import { cockpitTargetHref } from '@/features/sessions/cockpitTarget'
 import {
-	DISPLAY_STATUS_LABEL,
-	sessionDisplayStatus,
-} from '@/features/sessions/displayStatus'
-import {
 	launchSession,
 	launchShellSession,
 } from '@/features/sessions/launchSession'
@@ -54,24 +50,9 @@ const sessionItems = (
 				repo === null
 					? sessionLabel(session)
 					: `${sessionLabel(session)} — ${repo}`,
-			hint: DISPLAY_STATUS_LABEL[sessionDisplayStatus(session)],
 			run: () => openSession(session),
 		}
 	})
-
-// TODO(review-branches): list real reviewable branches instead of
-// ended-clean sessions once get_diff takes a branch/worktree argument.
-const reviewItems = (
-	sessions: ReadonlyArray<SessionState>,
-): ReadonlyArray<PaletteItem> =>
-	sessions
-		.filter(session => sessionDisplayStatus(session) === 'review')
-		.map(session => ({
-			id: `review:${session.id}`,
-			group: 'Review',
-			label: `${sessionLabel(session)} — needs review`,
-			run: () => navigate(reviewHref()),
-		}))
 
 const planItems = (
 	plans: ReadonlyArray<PlanEntry>,
@@ -158,8 +139,8 @@ const actionItems = (
 
 /**
  * Everything ⌘K can reach, grouped in the design's order: live sessions,
- * sessions awaiting review, plan documents, screens, then launch actions
- * (the latter only when a project is active).
+ * plan documents, screens, then launch actions (the latter only when a
+ * project is active).
  */
 export const buildPaletteItems = ({
 	sessions,
@@ -168,7 +149,6 @@ export const buildPaletteItems = ({
 	activeSessionId,
 }: BuildArgs): ReadonlyArray<PaletteItem> => [
 	...sessionItems(sessions),
-	...reviewItems(sessions),
 	...planItems(plans),
 	...screenItems(cockpitTargetHref(sessions, activeSessionId)),
 	...actionItems(activeProjectPath),

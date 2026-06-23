@@ -6,12 +6,13 @@ import {
 	HUES,
 	compactPath,
 	dormantRepos,
-	groupSessionsByRepo,
+	groupSessionsByRepo as groupSessionsByRepoImpl,
 	orderProjectGroups,
 	projectHue,
 	projectName,
 	withActiveGroup,
 } from './projectGroups'
+import type { StatusOf } from './projectGroups'
 
 const session = (
 	id: string,
@@ -21,11 +22,25 @@ const session = (
 	binary: 'claude',
 	repoPath: '/Users/me/dev/mizraj',
 	title: null,
-	status: 'running',
-	exitCode: null,
 	startedAt: 1_000,
 	...overrides,
 })
+
+// Most grouping tests don't care about the live sub-state; default every
+// session to running and let the ordering test inject its own status map.
+const allRunning: StatusOf = () => 'running'
+
+// A status map marking the given ids idle, the rest running.
+const idleFor =
+	(ids: ReadonlyArray<string>): StatusOf =>
+	target =>
+		ids.includes(target.id) ? 'idle' : 'running'
+
+const groupSessionsByRepo = (
+	sessions: ReadonlyArray<SessionState>,
+	statusOf: StatusOf = allRunning,
+): ReturnType<typeof groupSessionsByRepoImpl> =>
+	groupSessionsByRepoImpl(sessions, statusOf)
 
 describe('groupSessionsByRepo', () => {
 	it('groups sessions by repo, in first-seen order', () => {
@@ -58,22 +73,21 @@ describe('groupSessionsByRepo', () => {
 	})
 
 	it('orders sessions inside a group: running first, then youngest', () => {
-		const groups = groupSessionsByRepo([
-			session('old-review', {
-				status: 'ended',
-				exitCode: 0,
-				startedAt: 500,
-			}),
-			session('old-run', { startedAt: 100 }),
-			session('new-run', { startedAt: 900 }),
-			session('failed', { status: 'ended', exitCode: 1, startedAt: 800 }),
-		])
+		const groups = groupSessionsByRepo(
+			[
+				session('idle-young', { startedAt: 500 }),
+				session('old-run', { startedAt: 100 }),
+				session('new-run', { startedAt: 900 }),
+				session('idle-old', { startedAt: 800 }),
+			],
+			idleFor(['idle-young', 'idle-old']),
+		)
 
 		expect(groups[0]?.sessions.map(s => s.id)).toEqual([
 			'new-run',
 			'old-run',
-			'old-review',
-			'failed',
+			'idle-old',
+			'idle-young',
 		])
 	})
 })

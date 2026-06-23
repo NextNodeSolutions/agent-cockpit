@@ -17,7 +17,8 @@ import {
 	AGENT_END_EVENT,
 	AGENT_TITLE_EVENT,
 	cellFramesAtom,
-	endSessionAtom,
+	removeSessionAtom,
+	sessionActivityAtom,
 	sessionsAtom,
 	startSessionAtom,
 } from './sessions'
@@ -31,7 +32,7 @@ describe('sessions atoms', () => {
 		store.set(sessionsAtom, {})
 	})
 
-	it('startSessionAtom registers a fresh running session', () => {
+	it('startSessionAtom registers a fresh session', () => {
 		vi.useFakeTimers()
 		vi.setSystemTime(1_750_000_000_000)
 
@@ -46,24 +47,36 @@ describe('sessions atoms', () => {
 			binary: 'claude',
 			repoPath: '/repo',
 			title: null,
-			status: 'running',
-			exitCode: null,
 			startedAt: 1_750_000_000_000,
 		})
 		vi.useRealTimers()
 	})
 
-	it('endSessionAtom flips status to ended and stores the exit code', () => {
+	it('removeSessionAtom drops the session and its activity + last frame', () => {
 		store.set(startSessionAtom, {
 			id: 'sess-a',
 			binary: 'claude',
 			repoPath: '/repo',
 		})
-		store.set(endSessionAtom, { sessionId: 'sess-a', exitCode: 0 })
+		store.set(sessionActivityAtom, { 'sess-a': 1 })
+		store.set(cellFramesAtom, {
+			'sess-a': {
+				session_id: 'sess-a',
+				cols: 1,
+				rows: 1,
+				cells: [],
+				cursor: null,
+				mouse_reporting: false,
+				viewport_top: 0,
+				history_total: 0,
+			},
+		})
 
-		const session = store.get(sessionsAtom)['sess-a']
-		expect(session?.status).toBe('ended')
-		expect(session?.exitCode).toBe(0)
+		store.set(removeSessionAtom, 'sess-a')
+
+		expect(store.get(sessionsAtom)['sess-a']).toBeUndefined()
+		expect(store.get(sessionActivityAtom)['sess-a']).toBeUndefined()
+		expect(store.get(cellFramesAtom)['sess-a']).toBeUndefined()
 	})
 
 	it('subscribers are notified on every atom write', () => {
@@ -77,7 +90,7 @@ describe('sessions atoms', () => {
 			binary: 'claude',
 			repoPath: '/repo',
 		})
-		store.set(endSessionAtom, { sessionId: 'sess-a', exitCode: 0 })
+		store.set(removeSessionAtom, 'sess-a')
 
 		unsubscribe()
 		expect(seen).toHaveLength(2)
@@ -137,7 +150,7 @@ describe('startAgentEventsBridge', () => {
 		return handler
 	}
 
-	it('routes agent:end into endSessionAtom for a known session', () => {
+	it('routes agent:end into removeSessionAtom — the session is dropped', () => {
 		startAgentEventsBridge()
 		const handler = getCapturedEndHandler()
 
@@ -146,11 +159,9 @@ describe('startAgentEventsBridge', () => {
 			binary: 'claude',
 			repoPath: '/repo',
 		})
-		handler({ payload: { session_id: 'sess-a', exit_code: 0 } })
+		handler({ payload: { session_id: 'sess-a' } })
 
-		const session = store.get(sessionsAtom)['sess-a']
-		expect(session?.status).toBe('ended')
-		expect(session?.exitCode).toBe(0)
+		expect(store.get(sessionsAtom)['sess-a']).toBeUndefined()
 	})
 
 	const getCapturedCellsHandler = (): ((event: {

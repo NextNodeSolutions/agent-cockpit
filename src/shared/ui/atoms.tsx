@@ -6,7 +6,7 @@ import type { SessionDisplayStatus } from '@/features/sessions/displayStatus'
 import { DISPLAY_STATUS_LABEL } from '@/features/sessions/displayStatus'
 
 /** The status flavors a dot can show (see .sdot-* in components.css). */
-export type SDotKind = 'run' | 'idle' | 'input' | 'rev' | 'done' | 'fail'
+export type SDotKind = 'run' | 'idle' | 'input' | 'rev' | 'done'
 
 type SDotProps = {
 	s: SDotKind
@@ -20,8 +20,6 @@ const TAG_CLASS: Readonly<Record<SessionDisplayStatus, string>> = {
 	running: 'tag tag-run',
 	idle: 'tag tag-idle',
 	needInput: 'tag tag-input',
-	review: 'tag tag-rev',
-	failed: 'tag tag-fail',
 }
 
 type StatusTagProps = {

@@ -8,8 +8,8 @@ import { useSessions } from './useSessions'
 
 /**
  * Where "go to the cockpit" (rail button, ⌘2, palette) should land: the
- * active session if it still exists, else the first running session, else
- * the most recently started one, else the cockpit's empty state.
+ * active session if it still exists, else the most recently started session
+ * (every session in the store is live), else the cockpit's empty state.
  */
 export const cockpitTargetHref = (
 	sessions: ReadonlyArray<SessionState>,
@@ -19,9 +19,6 @@ export const cockpitTargetHref = (
 		activeSessionId !== null &&
 		sessions.some(session => session.id === activeSessionId)
 	if (isActiveAlive) return agentRunHref(activeSessionId)
-
-	const running = sessions.find(session => session.status === 'running')
-	if (running) return agentRunHref(running.id)
 
 	const mostRecent = sessions.reduce<SessionState | null>(
 		(latest, session) =>

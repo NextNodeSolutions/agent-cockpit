@@ -50,18 +50,18 @@ describe('atoms', () => {
 			expect(tag?.textContent).toBe('running')
 		})
 
-		it('labels an ended-clean session as needing review', () => {
-			render(<StatusTag status="review" />)
+		it('labels an idle session with the idle variant', () => {
+			render(<StatusTag status="idle" />)
 
-			const tag = container.querySelector('.tag.tag-rev')
-			expect(tag?.textContent).toBe('needs review')
+			const tag = container.querySelector('.tag.tag-idle')
+			expect(tag?.textContent).toBe('idle')
 		})
 
-		it('labels a failed session with the fail variant', () => {
-			render(<StatusTag status="failed" />)
+		it('labels a blocked session as needing input', () => {
+			render(<StatusTag status="needInput" />)
 
-			const tag = container.querySelector('.tag.tag-fail')
-			expect(tag?.textContent).toBe('failed')
+			const tag = container.querySelector('.tag.tag-input')
+			expect(tag?.textContent).toBe('needs input')
 		})
 	})
 

@@ -6,7 +6,6 @@ import {
 	projectName,
 } from '@/features/missionControl/projectGroups'
 import { useProjects } from '@/features/projects/useProjects'
-import { sessionDisplayStatus } from '@/features/sessions/displayStatus'
 import type { SessionState } from '@/features/sessions/sessions'
 import { useSessions } from '@/features/sessions/useSessions'
 import { useOverviews } from '@/features/tasks/useOverviews'
@@ -141,13 +140,9 @@ export const PipelineView = ({
 	const runningCount =
 		columns.runningSessions.length + columns.inProgressTasks.length
 	const doneCount = columns.doneSessions.length + columns.done.length
-	// The column mixes review and failed cards AND re-orders by repo, so the
-	// primary Approve must be computed against the grouped order — the first
-	// reviewable card of the first group that offers one.
-	const firstReviewId = primaryApproveSessionId(
-		columns.endedSessions,
-		session => sessionDisplayStatus(session) === 'review',
-	)
+	// The Review column re-orders cards by repo, so the primary Approve is the
+	// first card of the first non-empty group (empty in the parked steady state).
+	const firstReviewId = primaryApproveSessionId(columns.endedSessions)
 
 	return (
 		<section className="pipeline" aria-label="Pipeline">

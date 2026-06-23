@@ -28,9 +28,9 @@ type TermTabProps = {
 	sessionId: string
 }
 
-// One pill merges the status dot, the branch of the session's repo (HEAD of
-// the active project — the standalone BranchChip folded in here) and the
-// exit-code suffix; the session label stands in while the head is unknown.
+// One pill merges the status dot and the branch of the session's repo (HEAD of
+// the active project — the standalone BranchChip folded in here); the session
+// label stands in while the head is unknown.
 const TermTab = ({ session, sessionId }: TermTabProps): React.JSX.Element => {
 	const head = useRepoHead(session?.repoPath ?? null)
 	const activityFor = useSessionActivity()
@@ -43,11 +43,8 @@ const TermTab = ({ session, sessionId }: TermTabProps): React.JSX.Element => {
 
 	return (
 		<span className="fc-term-tab">
-			{session && <SDot s={sessionDotKind(session, activityFor(session.id))} />}
+			{session && <SDot s={sessionDotKind(activityFor(session.id))} />}
 			{label}
-			{session?.status === 'ended' && session.exitCode !== null && (
-				<span className="fc-term-exit">exit {session.exitCode}</span>
-			)}
 		</span>
 	)
 }
@@ -57,7 +54,6 @@ export const AgentRun = ({
 	activeProjectPath,
 }: Props): React.JSX.Element => {
 	const session = useSession(sessionId)
-	const ended = session?.status === 'ended'
 
 	return (
 		<div className="fc-wrap stagger">
@@ -77,7 +73,7 @@ export const AgentRun = ({
 						className="btn btn-sm btn-ghost"
 						style={{ color: 'var(--ctp-subtext0)' }}
 						onClick={() => stopSession(sessionId)}
-						disabled={ended}
+						disabled={session === undefined}
 					>
 						◼ Stop
 					</button>

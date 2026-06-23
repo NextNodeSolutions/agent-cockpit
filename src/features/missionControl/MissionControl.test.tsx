@@ -57,9 +57,9 @@ vi.mock('@/shared/logger', () => ({
 import { projectsAtom } from '@/features/projects/useProjects'
 import {
 	cellFramesAtom,
+	sessionActivityAtom,
 	sessionsAtom,
 	startSessionAtom,
-	endSessionAtom,
 } from '@/features/sessions/sessions'
 import type {
 	CellFramePayload,
@@ -102,7 +102,7 @@ const seedSession = (
 	overrides: {
 		binary?: string
 		repoPath?: string | null
-		ended?: { exitCode: number }
+		idle?: boolean
 	} = {},
 ): void => {
 	store.set(startSessionAtom, {
@@ -113,10 +113,12 @@ const seedSession = (
 				? '/Users/me/dev/mizraj'
 				: overrides.repoPath,
 	})
-	if (overrides.ended) {
-		store.set(endSessionAtom, {
-			sessionId: id,
-			exitCode: overrides.ended.exitCode,
+	// A stale activity timestamp reads as idle against the live clock; a session
+	// with none stays optimistically running.
+	if (overrides.idle) {
+		store.set(sessionActivityAtom, {
+			...store.get(sessionActivityAtom),
+			[id]: 1,
 		})
 	}
 }
@@ -128,6 +130,7 @@ describe('MissionControl', () => {
 	beforeEach(() => {
 		store.set(sessionsAtom, {})
 		store.set(cellFramesAtom, {})
+		store.set(sessionActivityAtom, {})
 		store.set(projectsAtom, [])
 		invokeMock.mockReset()
 		invokeMock.mockResolvedValue(undefined)
@@ -189,12 +192,12 @@ describe('MissionControl', () => {
 
 	it('offers a reset chip when the filter hides every agent', () => {
 		seedSession('run-1')
-		window.history.replaceState({}, '', '/?filter=failed')
+		window.history.replaceState({}, '', '/?filter=idle')
 		render()
 
 		expect(cards()).toHaveLength(0)
 		const empty = container.querySelector('.mc-empty--filter')
-		expect(empty?.textContent).toContain('Nothing failed right now.')
+		expect(empty?.textContent).toContain('Nothing idle right now.')
 
 		const resetChip = empty?.querySelector('.chip')
 		expect(resetChip?.textContent).toContain('Show all')
@@ -208,14 +211,12 @@ describe('MissionControl', () => {
 
 	it('renders one card per session with its derived status', () => {
 		seedSession('run-1')
-		seedSession('done-1', { ended: { exitCode: 0 } })
-		seedSession('fail-1', { ended: { exitCode: 9 } })
+		seedSession('idle-1', { idle: true })
 		render()
 
-		expect(cards()).toHaveLength(3)
+		expect(cards()).toHaveLength(2)
 		expect(container.textContent).toContain('running')
-		expect(container.textContent).toContain('needs review')
-		expect(container.textContent).toContain('failed')
+		expect(container.textContent).toContain('idle')
 	})
 
 	it('shows the live terminal tail on a card, cursor on the last line', () => {
@@ -233,34 +234,13 @@ describe('MissionControl', () => {
 		expect(lines[1]?.querySelector('.caret')).not.toBeNull()
 	})
 
-	it('shows a waiting prompt while a running card has no output yet', () => {
+	it('shows a waiting prompt while a card has no output yet', () => {
 		seedSession('run-1')
 		render()
 
 		const term = container.querySelector('.mini-term')
 		expect(term?.textContent).toContain('waiting for output…')
 		expect(term?.querySelector('.caret')).not.toBeNull()
-	})
-
-	it('renders a review card with idle lines, no cursor, and a review CTA', () => {
-		seedSession('done-1', { ended: { exitCode: 0 } })
-		render()
-
-		const term = container.querySelector('.mini-term')
-		expect(term?.textContent).toContain('done')
-		expect(term?.textContent).toContain('⚑ waiting for your review')
-		expect(term?.querySelector('.caret')).toBeNull()
-		expect(container.querySelector('.gobtn')?.textContent).toBe('Review →')
-	})
-
-	it('renders a failed card with its exit code, no cursor', () => {
-		seedSession('fail-1', { ended: { exitCode: 9 } })
-		render()
-
-		const term = container.querySelector('.mini-term')
-		expect(term?.textContent).toContain('✗ exited with code 9')
-		expect(term?.textContent).toContain('open to inspect the terminal')
-		expect(term?.querySelector('.caret')).toBeNull()
 	})
 
 	it('subscribes each visible session to cell frames and releases on unmount', () => {
@@ -279,7 +259,7 @@ describe('MissionControl', () => {
 		})
 	})
 
-	it('opens the cockpit for a running card', () => {
+	it('opens the cockpit for a card', () => {
 		seedSession('run-1')
 		render()
 
@@ -292,54 +272,38 @@ describe('MissionControl', () => {
 		expect(navigateMock).toHaveBeenCalledWith('/agent-run/run-1')
 	})
 
-	it('opens the review screen for a needs-review card', () => {
-		seedSession('done-1', { ended: { exitCode: 0 } })
-		render()
-
-		act(() => {
-			cards()[0]?.dispatchEvent(
-				new MouseEvent('click', { bubbles: true }),
-			)
-		})
-
-		expect(navigateMock).toHaveBeenCalledWith('/review')
-	})
-
 	it('filter chips deep-link the status into the URL', () => {
 		seedSession('run-1')
-		seedSession('done-1', { ended: { exitCode: 0 } })
 		render()
 
-		const reviewChip = Array.from(container.querySelectorAll('.chip')).find(
-			chip => chip.textContent?.includes('Needs review'),
+		const idleChip = Array.from(container.querySelectorAll('.chip')).find(
+			chip => chip.textContent?.includes('Idle'),
 		)
-		expect(reviewChip).toBeDefined()
+		expect(idleChip).toBeDefined()
 
 		act(() => {
-			reviewChip?.dispatchEvent(
-				new MouseEvent('click', { bubbles: true }),
-			)
+			idleChip?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
 		})
 
-		expect(navigateMock).toHaveBeenCalledWith('/?filter=review')
+		expect(navigateMock).toHaveBeenCalledWith('/?filter=idle')
 	})
 
 	it('the URL filter narrows the wall and lights its chip', () => {
 		seedSession('run-1')
-		seedSession('done-1', { ended: { exitCode: 0 } })
-		window.history.replaceState({}, '', '/?filter=review')
+		seedSession('idle-1', { idle: true })
+		window.history.replaceState({}, '', '/?filter=idle')
 		render()
 
 		expect(cards()).toHaveLength(1)
-		expect(cards()[0]?.getAttribute('data-status')).toBe('review')
+		expect(cards()[0]?.getAttribute('data-status')).toBe('idle')
 		const activeChip = container.querySelector('.chip[data-on="true"]')
-		expect(activeChip?.textContent).toContain('Needs review')
+		expect(activeChip?.textContent).toContain('Idle')
 	})
 
 	it('counts every chip over all sessions, not the filtered view', () => {
 		seedSession('run-1')
-		seedSession('done-1', { ended: { exitCode: 0 } })
-		window.history.replaceState({}, '', '/?filter=review')
+		seedSession('idle-1', { idle: true })
+		window.history.replaceState({}, '', '/?filter=idle')
 		render()
 
 		const chipTexts = Array.from(container.querySelectorAll('.chip')).map(
@@ -347,14 +311,12 @@ describe('MissionControl', () => {
 		)
 		expect(chipTexts).toContain('All2')
 		expect(chipTexts).toContain('Running1')
-		expect(chipTexts).toContain('Needs review1')
-		expect(chipTexts).toContain('Failed0')
+		expect(chipTexts).toContain('Idle1')
 	})
 
 	it('heads the screen with its title and the live scope line', () => {
 		seedSession('run-1', { repoPath: '/repo/x' })
 		seedSession('run-2', { repoPath: '/repo/y' })
-		seedSession('done-1', { repoPath: '/repo/x', ended: { exitCode: 0 } })
 		render(null)
 
 		expect(container.querySelector('.view-head h2')?.textContent).toBe(
@@ -386,14 +348,12 @@ describe('MissionControl', () => {
 	it('sums each status in the group header, over the whole group', () => {
 		seedSession('run-1')
 		seedSession('run-2')
-		seedSession('done-1', { ended: { exitCode: 0 } })
-		seedSession('fail-1', { ended: { exitCode: 9 } })
+		seedSession('idle-1', { idle: true })
 		render(null)
 
 		const stats = container.querySelector('.proj-stats')
 		expect(stats?.textContent).toContain('2 running')
-		expect(stats?.textContent).toContain('1 review')
-		expect(stats?.textContent).toContain('1 failed')
+		expect(stats?.textContent).toContain('1 idle')
 	})
 
 	it('folds a project on its disclosure click and reopens it on the next', () => {
@@ -513,11 +473,8 @@ describe('MissionControl', () => {
 		expect(beta?.querySelector('.ac-diff')).toBeNull()
 	})
 
-	it('opening a review card from another repo retargets the preference first', async () => {
-		seedSession('done-b', {
-			repoPath: '/repo/beta',
-			ended: { exitCode: 0 },
-		})
+	it('opening a card from another repo retargets the preference first', async () => {
+		seedSession('sess-b', { repoPath: '/repo/beta' })
 
 		await act(async () => {
 			root.render(<MissionControl activeProjectPath="/repo/alpha" />)
@@ -529,7 +486,7 @@ describe('MissionControl', () => {
 		})
 
 		expect(setLastProjectPathMock).toHaveBeenCalledWith('/repo/beta')
-		expect(navigateMock).toHaveBeenCalledWith('/review')
+		expect(navigateMock).toHaveBeenCalledWith('/agent-run/sess-b')
 	})
 
 	it('folds registered repos without sessions into a compact dormant section', () => {
@@ -585,12 +542,12 @@ describe('MissionControl', () => {
 		expect(container.querySelector('.mc-dormant')).not.toBeNull()
 	})
 
-	it('orders running cards before ended ones', () => {
-		seedSession('done-1', { ended: { exitCode: 0 } })
+	it('orders running cards before idle ones', () => {
+		seedSession('idle-1', { idle: true })
 		seedSession('run-1')
 		render()
 
 		const statuses = cards().map(card => card.getAttribute('data-status'))
-		expect(statuses).toEqual(['running', 'review'])
+		expect(statuses).toEqual(['running', 'idle'])
 	})
 })

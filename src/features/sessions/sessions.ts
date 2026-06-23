@@ -2,8 +2,6 @@ import { atom } from 'jotai'
 
 import type { CellFramePayload } from './terminalWire'
 
-export type SessionStatus = 'running' | 'ended'
-
 export type SessionState = {
 	id: string
 	/// The spawned program ('claude' for agent runs, the user's shell for
@@ -15,16 +13,16 @@ export type SessionState = {
 	/// The OSC 0/2 title the program set, when any — overrides the derived
 	/// label while present (TP13).
 	title: string | null
-	status: SessionStatus
-	exitCode: number | null
 	/// Epoch ms the session was registered — what relative "age" labels are
 	/// computed from.
 	startedAt: number
 }
 
+/// A session's PTY exited. The session is dropped from the store on this event
+/// (no kept history yet); `exit_code` is part of the backend wire shape but
+/// unused on the front for now.
 export type SessionEndPayload = {
 	session_id: string
-	exit_code: number
 }
 
 export const AGENT_END_EVENT = 'agent:end'
@@ -60,8 +58,6 @@ export const startSessionAtom = atom(
 				binary,
 				repoPath,
 				title: null,
-				status: 'running',
-				exitCode: null,
 				startedAt: Date.now(),
 			},
 		})
@@ -79,21 +75,6 @@ export const setSessionTitleAtom = atom(
 		set(sessionsAtom, {
 			...sessions,
 			[sessionId]: { ...existing, title },
-		})
-	},
-)
-
-type EndSessionArgs = { sessionId: string; exitCode: number | null }
-
-export const endSessionAtom = atom(
-	null,
-	(get, set, { sessionId, exitCode }: EndSessionArgs) => {
-		const sessions = get(sessionsAtom)
-		const existing = sessions[sessionId]
-		if (!existing) return
-		set(sessionsAtom, {
-			...sessions,
-			[sessionId]: { ...existing, status: 'ended', exitCode },
 		})
 	},
 )
@@ -132,6 +113,24 @@ export const markSessionActiveAtom = atom(
 		})
 	},
 )
+
+// A session's PTY exited: drop it from the store entirely (no kept history) and
+// evict the per-session activity and last-frame entries so nothing dangles.
+// Split panes are pruned separately by startSplitLifecycle's own listener.
+export const removeSessionAtom = atom(null, (get, set, sessionId: string) => {
+	const sessions = get(sessionsAtom)
+	if (sessions[sessionId] === undefined) return
+	const { [sessionId]: _removedSession, ...remainingSessions } = sessions
+	set(sessionsAtom, remainingSessions)
+
+	const { [sessionId]: _removedActivity, ...remainingActivity } =
+		get(sessionActivityAtom)
+	set(sessionActivityAtom, remainingActivity)
+
+	const { [sessionId]: _removedFrame, ...remainingFrames } =
+		get(cellFramesAtom)
+	set(cellFramesAtom, remainingFrames)
+})
 
 // Which session currently owns the keyboard. Decoupled from DOM focus on
 // purpose: the terminal is the app's centre of gravity, so keystrokes flow to

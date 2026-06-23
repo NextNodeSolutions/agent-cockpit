@@ -9,8 +9,8 @@ import {
 	AGENT_CELLS_EVENT,
 	AGENT_END_EVENT,
 	AGENT_TITLE_EVENT,
-	endSessionAtom,
 	markSessionActiveAtom,
+	removeSessionAtom,
 	sessionsAtom,
 	setCellFrameAtom,
 	setSessionTitleAtom,
@@ -60,11 +60,8 @@ export const startAgentEventsBridge = (): void => {
 
 	forwardSessionEvent<SessionEndPayload>(
 		AGENT_END_EVENT,
-		({ session_id, exit_code }) => {
-			store.set(endSessionAtom, {
-				sessionId: session_id,
-				exitCode: exit_code,
-			})
+		({ session_id }) => {
+			store.set(removeSessionAtom, session_id)
 		},
 	)
 
@@ -79,9 +76,12 @@ export const startAgentEventsBridge = (): void => {
 		},
 	)
 
-	forwardSessionEvent<ActivityPayload>(AGENT_ACTIVITY_EVENT, ({ session_id }) => {
-		store.set(markSessionActiveAtom, session_id)
-	})
+	forwardSessionEvent<ActivityPayload>(
+		AGENT_ACTIVITY_EVENT,
+		({ session_id }) => {
+			store.set(markSessionActiveAtom, session_id)
+		},
+	)
 }
 
 // Test-only escape hatch so suites can verify idempotency from a clean slate.

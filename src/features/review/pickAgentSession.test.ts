@@ -9,14 +9,12 @@ const session = (overrides: Partial<SessionState>): SessionState => ({
 	binary: 'claude',
 	repoPath: '/repo',
 	title: null,
-	status: 'running',
-	exitCode: null,
 	startedAt: 0,
 	...overrides,
 })
 
 describe('pickAgentSession', () => {
-	it('picks the most recent running agent in the repo', () => {
+	it('picks the most recent agent in the repo', () => {
 		const picked = pickAgentSession(
 			[
 				session({ id: 'old', startedAt: 1 }),
@@ -40,7 +38,7 @@ describe('pickAgentSession', () => {
 		expect(picked?.id).toBe('agent')
 	})
 
-	it('falls back to a running shell when no agent lives', () => {
+	it('falls back to a shell when no agent lives', () => {
 		const picked = pickAgentSession(
 			[session({ id: 'shell', binary: '/bin/zsh' })],
 			'/repo',
@@ -49,12 +47,9 @@ describe('pickAgentSession', () => {
 		expect(picked?.id).toBe('shell')
 	})
 
-	it('ignores ended sessions and other repos', () => {
+	it('ignores sessions in other repos', () => {
 		const picked = pickAgentSession(
-			[
-				session({ id: 'done', status: 'ended', exitCode: 0 }),
-				session({ id: 'elsewhere', repoPath: '/other' }),
-			],
+			[session({ id: 'elsewhere', repoPath: '/other' })],
 			'/repo',
 		)
 

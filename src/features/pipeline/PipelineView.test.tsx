@@ -43,7 +43,6 @@ vi.mock('@/shared/logger', () => ({
 import { projectsAtom } from '@/features/projects/useProjects'
 import {
 	cellFramesAtom,
-	endSessionAtom,
 	sessionsAtom,
 	setCellFrameAtom,
 	startSessionAtom,
@@ -53,7 +52,6 @@ import type {
 	WireCell,
 } from '@/features/sessions/terminalWire'
 import type { Overview } from '@/features/tasks/tasks'
-import { toastsAtom } from '@/shared/toasts'
 
 import { approvedSessionIdsAtom } from './approvedSessions'
 import { PipelineView } from './PipelineView'
@@ -400,18 +398,12 @@ describe('PipelineView', () => {
 		expect(doneCard?.textContent).toContain('✓ done')
 	})
 
-	it('shows a status pill and the session repo on session cards', async () => {
+	it('shows a status pill and the session repo on running session cards', async () => {
 		store.set(startSessionAtom, {
 			id: 'run-1',
 			binary: 'claude',
 			repoPath: '/repo/mizraj',
 		})
-		store.set(startSessionAtom, {
-			id: 'rev-1',
-			binary: 'claude',
-			repoPath: '/repo/mizraj',
-		})
-		store.set(endSessionAtom, { sessionId: 'rev-1', exitCode: 0 })
 		await render()
 
 		const runningCard = column('Running')?.querySelector('.pipeline__card')
@@ -421,10 +413,6 @@ describe('PipelineView', () => {
 		expect(
 			runningCard?.querySelector('.pipeline__branch')?.textContent,
 		).toBe('mizraj')
-		const reviewCard = column('Review')?.querySelector('.pipeline__card')
-		expect(reviewCard?.querySelector('.tag-rev')?.textContent).toBe(
-			'needs review',
-		)
 	})
 
 	it('previews the last two terminal lines with a caret on running cards', async () => {
@@ -466,249 +454,30 @@ describe('PipelineView', () => {
 		expect(lines[0]?.querySelector('.caret')).not.toBeNull()
 	})
 
-	it('gives failed cards a single Open action', async () => {
+	it('keeps the review and done-session columns empty while every session is live', async () => {
 		store.set(startSessionAtom, {
-			id: 'fail-1',
+			id: 'run-1',
 			binary: 'claude',
 			repoPath: '/repo',
 		})
-		store.set(endSessionAtom, { sessionId: 'fail-1', exitCode: 2 })
-		await render()
-
-		const failedCard = column('Review')?.querySelector('.pipeline__card')
-		expect(failedCard?.querySelector('.tag-fail')?.textContent).toBe(
-			'failed',
-		)
-		const labels = Array.from(
-			failedCard?.querySelectorAll('button') ?? [],
-		).map(button => button.textContent)
-		expect(labels).toEqual(['Open'])
-
-		const open = failedCard?.querySelector('button')
-		await act(async () => {
-			open?.click()
-		})
-		expect(navigateMock).toHaveBeenCalledWith('/agent-run/fail-1')
-	})
-
-	it('keeps the primary Approve on the first review card past failed ones', async () => {
-		store.set(startSessionAtom, {
-			id: 'fail-1',
-			binary: 'claude',
-			repoPath: '/repo',
-		})
-		store.set(endSessionAtom, { sessionId: 'fail-1', exitCode: 2 })
-		store.set(startSessionAtom, {
-			id: 'rev-1',
-			binary: 'claude',
-			repoPath: '/repo',
-		})
-		store.set(endSessionAtom, { sessionId: 'rev-1', exitCode: 0 })
-		store.set(startSessionAtom, {
-			id: 'rev-2',
-			binary: 'claude',
-			repoPath: '/repo',
-		})
-		store.set(endSessionAtom, { sessionId: 'rev-2', exitCode: 0 })
-		await render()
-
-		const approves = Array.from(
-			column('Review')?.querySelectorAll<HTMLButtonElement>('button') ??
-				[],
-		).filter(button => button.textContent?.includes('Approve'))
-		expect(approves).toHaveLength(2)
-		expect(approves[0]?.className).toContain('btn-primary')
-		expect(approves[1]?.className).toContain('btn-outline')
-		expect(approves[1]?.className).not.toContain('btn-primary')
-	})
-
-	it('puts the primary Approve on the first repo group after grouping', async () => {
-		store.set(projectsAtom, ['/repo/alpha', '/repo/beta'])
-		invokeMock.mockImplementation((command: string) => {
-			if (command === 'tasks_overview') {
-				return Promise.resolve({ milestones: [], userTasks: [] })
-			}
-			if (command === 'get_diff') return Promise.resolve({ patch: '' })
-			return Promise.resolve(undefined)
-		})
-		// Flat order: alpha's failed card, then beta's review, then alpha's
-		// review. The flat-first *reviewable* session is beta's — but the
-		// Review column re-orders by repo, so alpha's group renders first and
-		// owns the visually-first Approve. The primary must land there.
-		store.set(startSessionAtom, {
-			id: 'alpha-fail',
-			binary: 'claude',
-			repoPath: '/repo/alpha',
-		})
-		store.set(endSessionAtom, { sessionId: 'alpha-fail', exitCode: 2 })
-		store.set(startSessionAtom, {
-			id: 'beta-review',
-			binary: 'claude',
-			repoPath: '/repo/beta',
-		})
-		store.set(endSessionAtom, { sessionId: 'beta-review', exitCode: 0 })
-		store.set(startSessionAtom, {
-			id: 'alpha-review',
-			binary: 'claude',
-			repoPath: '/repo/alpha',
-		})
-		store.set(endSessionAtom, { sessionId: 'alpha-review', exitCode: 0 })
-		await render('/repo/alpha')
-
-		const reviewColumn = column('Review')
-		const groups = Array.from(
-			reviewColumn?.querySelectorAll('.pipeline__repo-group') ?? [],
-		)
-		// alpha's group is rendered first (first-seen via alpha-fail).
-		expect(groups[0]?.querySelector('.pipeline__repo')?.textContent).toBe(
-			'alpha',
-		)
-		const approves = Array.from(
-			reviewColumn?.querySelectorAll<HTMLButtonElement>('button') ?? [],
-		).filter(button => button.textContent?.includes('Approve'))
-		expect(approves).toHaveLength(2)
-		// The first Approve in DOM order belongs to alpha's review card and is
-		// the primary; beta's stays an outline despite being first in the flat
-		// session order.
-		expect(approves[0]?.className).toContain('btn-primary')
-		expect(approves[1]?.className).toContain('btn-outline')
-		expect(approves[1]?.className).not.toContain('btn-primary')
-		const primaries = approves.filter(button =>
-			button.className.includes('btn-primary'),
-		)
-		expect(primaries).toHaveLength(1)
-	})
-
-	it('shows the working-tree diff totals on ended-session cards', async () => {
-		store.set(startSessionAtom, {
-			id: 'rev-1',
-			binary: 'claude',
-			repoPath: '/repo',
-		})
-		store.set(endSessionAtom, { sessionId: 'rev-1', exitCode: 0 })
-		await render()
-
-		const reviewCard = column('Review')?.querySelector('.pipeline__card')
-		expect(reviewCard?.querySelector('.stat')?.textContent).toBe(
-			'+4 −1 · 2 files',
-		)
-	})
-
-	it('hides the diff stat while the diff is unavailable', async () => {
-		invokeMock.mockImplementation((command: string) => {
-			if (command === 'tasks_overview') return Promise.resolve(OVERVIEW)
-			if (command === 'get_diff') {
-				return Promise.reject(new Error('not a repo'))
-			}
-			return Promise.resolve(undefined)
-		})
-		store.set(startSessionAtom, {
-			id: 'rev-1',
-			binary: 'claude',
-			repoPath: '/repo',
-		})
-		store.set(endSessionAtom, { sessionId: 'rev-1', exitCode: 0 })
 		await render()
 
 		expect(
-			column('Review')?.querySelector('.pipeline__card .stat'),
-		).toBeNull()
-	})
-
-	const reviewableSession = (id: string): void => {
-		store.set(startSessionAtom, {
-			id,
-			binary: 'claude',
-			repoPath: '/repo',
-		})
-		store.set(endSessionAtom, { sessionId: id, exitCode: 0 })
-	}
-
-	const approveButtons = (): ReadonlyArray<HTMLButtonElement> =>
-		Array.from(
-			column('Review')?.querySelectorAll<HTMLButtonElement>('button') ??
-				[],
-		).filter(button => button.textContent?.includes('Approve'))
-
-	it('makes only the first review approve primary', async () => {
-		reviewableSession('rev-1')
-		reviewableSession('rev-2')
-		await render()
-
-		const approvals = approveButtons()
-		expect(approvals).toHaveLength(2)
-		expect(approvals[0]?.className).toContain('btn-primary')
-		expect(approvals[1]?.className).toContain('btn-outline')
-		expect(approvals[1]?.className).not.toContain('btn-primary')
-	})
-
-	it('approves a review card into done as a merged card', async () => {
-		reviewableSession('rev-1')
-		reviewableSession('rev-2')
-		await render()
-
-		await act(async () => {
-			approveButtons()[0]?.click()
-		})
-
+			column('Running')?.querySelectorAll('.pipeline__card').length,
+		).toBeGreaterThan(0)
 		expect(
 			column('Review')?.querySelectorAll('.pipeline__card'),
-		).toHaveLength(1)
+		).toHaveLength(0)
+		expect(column('Review')?.textContent).toContain(
+			'nothing waiting on you',
+		)
+		// Done holds only task cards now — no merged-session cards.
 		const doneCards = Array.from(
 			column('Done')?.querySelectorAll('.pipeline__card') ?? [],
 		)
-		// The merged session is prepended above done tasks.
-		expect(doneCards[0]?.querySelector('.tag')?.textContent).toBe('merged')
-		expect(doneCards[0]?.textContent).toContain('✓ merged into main')
-		expect(doneCards[0]?.getAttribute('data-done')).toBe('true')
-		expect(doneCards[0]?.getAttribute('data-anim')).toBe('in')
-		expect(doneCards[1]?.textContent).toContain('CSV export')
 		expect(
-			column('Done')?.querySelector('.pipeline__count')?.textContent,
-		).toBe('2')
-		expect(store.get(toastsAtom).map(toast => toast.message)).toContain(
-			'Merged into main',
-		)
-	})
-
-	it('evicts a fresh session id when its session leaves the store', async () => {
-		// jsdom never fires animationend — exactly like `prefers-reduced-motion:
-		// reduce`, where the entrance animation (and its end event) is stilled.
-		// The fresh-animation set then only shrinks via the live-session prune:
-		// approve marks a card fresh, and when its session later leaves the
-		// store the id must be evicted, or a later session reusing that id would
-		// wrongly spring as fresh.
-		reviewableSession('rev-1')
-		await render()
-
-		await act(async () => {
-			approveButtons()[0]?.click()
-		})
-		expect(
-			column('Done')?.querySelector('.pipeline__card[data-anim="in"]'),
-		).not.toBeNull()
-
-		// The session leaves the store: the prune must drop its id from the
-		// fresh set, not strand it for the session's whole lifetime.
-		await act(async () => {
-			store.set(sessionsAtom, {})
-		})
-
-		// The same id reappears as a fresh-eligible running session. It was not
-		// just launched, so it must NOT carry the entrance animation.
-		await act(async () => {
-			store.set(startSessionAtom, {
-				id: 'rev-1',
-				binary: 'claude',
-				repoPath: '/repo',
-			})
-		})
-
-		const card = Array.from(
-			column('Running')?.querySelectorAll('.pipeline__card') ?? [],
-		).find(candidate => candidate.textContent?.includes('claude'))
-		expect(card).toBeDefined()
-		expect(card?.getAttribute('data-anim')).toBeNull()
+			doneCards.every(card => card.textContent?.includes('CSV export')),
+		).toBe(true)
 	})
 
 	it('springs the freshly launched session card into running', async () => {
@@ -787,18 +556,12 @@ describe('PipelineView', () => {
 		)
 	})
 
-	it('routes session cards: running opens the cockpit, ended opens the review', async () => {
+	it('routes a running session card to the cockpit on Open', async () => {
 		store.set(startSessionAtom, {
 			id: 'run-1',
 			binary: 'claude',
 			repoPath: '/repo',
 		})
-		store.set(startSessionAtom, {
-			id: 'rev-1',
-			binary: 'claude',
-			repoPath: '/repo',
-		})
-		store.set(endSessionAtom, { sessionId: 'rev-1', exitCode: 0 })
 		await render()
 
 		const open = Array.from(
@@ -809,15 +572,6 @@ describe('PipelineView', () => {
 			open?.click()
 		})
 		expect(navigateMock).toHaveBeenCalledWith('/agent-run/run-1')
-
-		const review = Array.from(
-			column('Review')?.querySelectorAll<HTMLButtonElement>('button') ??
-				[],
-		).find(button => button.textContent?.includes('Review'))
-		await act(async () => {
-			review?.click()
-		})
-		expect(navigateMock).toHaveBeenCalledWith('/review')
 	})
 
 	it('stops a running session from its card', async () => {

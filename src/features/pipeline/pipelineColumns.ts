@@ -60,19 +60,17 @@ export const groupColumnByRepo = (
 /**
  * The session that carries the primary Approve button in the Review column.
  * The column re-orders cards by repo ({@link groupColumnByRepo}), so the
- * visually-first Approve is the first reviewable session of the first group
- * that has one — NOT the first in the flat order, which can sit in a later
- * repo group on a multi-repo board. Returns null when no card offers Approve
- * (every ended session failed). `isReviewable` is injected so this module
- * stays free of the display-status layer.
+ * visually-first Approve is the first session of the first non-empty group —
+ * NOT the first in the flat order, which can sit in a later repo group on a
+ * multi-repo board. Returns null when the column is empty (the steady state
+ * until session history lands).
  */
 export const primaryApproveSessionId = (
 	endedSessions: ReadonlyArray<SessionState>,
-	isReviewable: (session: SessionState) => boolean,
 ): string | null => {
 	for (const group of groupColumnByRepo(endedSessions, [])) {
-		const reviewable = group.sessions.find(isReviewable)
-		if (reviewable !== undefined) return reviewable.id
+		const first = group.sessions[0]
+		if (first !== undefined) return first.id
 	}
 	return null
 }
@@ -86,11 +84,14 @@ const byStatus = (
 /**
  * Project the task trees of every repo and the live session set onto the
  * four pipeline columns (MP5: the board pilots ALL running work). Blocked
- * tasks stay in the backlog (visible, not actionable); ended sessions land
- * in Review whatever their exit — the card's status badge tells review from
- * failure — until they are approved, which moves them to Done as
- * `doneSessions`. Tasks keep their `repoPath` tag, so columns can group
- * visually by repo and actions stay scoped to their card's repo.
+ * tasks stay in the backlog (visible, not actionable); tasks keep their
+ * `repoPath` tag, so columns can group visually by repo and actions stay
+ * scoped to their card's repo.
+ *
+ * Every session in the store is live, so they all land in Running. The Review
+ * and Done(session) columns stay empty — the board's review/merge flow is
+ * parked until a session-history system lands; the wiring (approvedSessionIds)
+ * is kept so re-enabling it is a one-line change in the caller.
  */
 export const pipelineColumns = (
 	overviews: ReadonlyArray<Overview>,
@@ -98,13 +99,11 @@ export const pipelineColumns = (
 	approvedSessionIds: ReadonlySet<string>,
 ): PipelineColumns => {
 	const entries = overviews.flatMap(flattenEntries)
-	const ended = sessions.filter(session => session.status === 'ended')
+	const ended: ReadonlyArray<SessionState> = []
 	return {
 		backlog: byStatus(entries, ['backlog', 'blocked']),
 		inProgressTasks: byStatus(entries, ['in_progress']),
-		runningSessions: sessions.filter(
-			session => session.status === 'running',
-		),
+		runningSessions: [...sessions],
 		endedSessions: ended.filter(
 			session => !approvedSessionIds.has(session.id),
 		),

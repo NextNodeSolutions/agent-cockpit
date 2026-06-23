@@ -1,14 +1,12 @@
 import type { SDotKind } from '@/shared/ui/atoms'
 
-import type { SessionState } from './sessions'
-
 /**
- * The status axis the cockpit UI communicates:
+ * The status axis the cockpit UI communicates. Every session in the store is
+ * live (a PTY that exits is dropped, not kept as history), so the axis is the
+ * live sub-state only:
  * - `running`   — the agent is actively working (process alive, output flowing)
  * - `idle`      — alive but quiet, not doing anything right now
  * - `needInput` — paused mid-run, waiting on a human answer
- * - `review`    — ended cleanly; its changes await review
- * - `failed`    — ended on a non-zero or unknown exit
  *
  * `running` vs `idle` is driven by PTY output activity: a live session counts as
  * `running` while output is flowing and flips to `idle` once it has been quiet
@@ -16,12 +14,7 @@ import type { SessionState } from './sessions'
  * last output; see `sessionActivityAtom`). `needInput` still has no signal — it
  * needs a shell/agent prompt marker — so a blocked agent currently reads `idle`.
  */
-export type SessionDisplayStatus =
-	| 'running'
-	| 'idle'
-	| 'needInput'
-	| 'review'
-	| 'failed'
+export type SessionDisplayStatus = 'running' | 'idle' | 'needInput'
 
 /**
  * Quiet span after which a live session is shown `idle` rather than `running`.
@@ -38,12 +31,8 @@ export type SessionActivity = {
 }
 
 export const sessionDisplayStatus = (
-	session: SessionState,
 	activity?: SessionActivity,
 ): SessionDisplayStatus => {
-	if (session.status !== 'running') {
-		return session.exitCode === 0 ? 'review' : 'failed'
-	}
 	// A live session goes idle once output has been quiet past the threshold.
 	// Without an activity reading (caller passed none, or none seen yet) it
 	// stays optimistically `running` — a just-launched agent is working.
@@ -63,8 +52,6 @@ export const DISPLAY_STATUS_LABEL: Readonly<
 	running: 'running',
 	idle: 'idle',
 	needInput: 'needs input',
-	review: 'needs review',
-	failed: 'failed',
 }
 
 // The status-dot flavor per display status — the single home for the
@@ -76,11 +63,7 @@ export const DISPLAY_STATUS_DOT: Readonly<
 	running: 'run',
 	idle: 'idle',
 	needInput: 'input',
-	review: 'rev',
-	failed: 'fail',
 }
 
-export const sessionDotKind = (
-	session: SessionState,
-	activity?: SessionActivity,
-): SDotKind => DISPLAY_STATUS_DOT[sessionDisplayStatus(session, activity)]
+export const sessionDotKind = (activity?: SessionActivity): SDotKind =>
+	DISPLAY_STATUS_DOT[sessionDisplayStatus(activity)]

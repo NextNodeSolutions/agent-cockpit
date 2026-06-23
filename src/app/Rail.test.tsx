@@ -6,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import {
 	activeSessionIdAtom,
-	endSessionAtom,
 	sessionsAtom,
 	startSessionAtom,
 } from '@/features/sessions/sessions'
@@ -84,37 +83,6 @@ describe('Rail', () => {
 			window.dispatchEvent(new PopStateEvent('popstate'))
 		})
 		expect(button('Cockpit')?.getAttribute('data-on')).toBe('true')
-	})
-
-	it('badges the review button with the needs-review count', () => {
-		store.set(startSessionAtom, {
-			id: 'done-1',
-			binary: 'claude',
-			repoPath: '/repo',
-		})
-		store.set(startSessionAtom, {
-			id: 'done-2',
-			binary: 'claude',
-			repoPath: '/repo',
-		})
-		store.set(endSessionAtom, { sessionId: 'done-1', exitCode: 0 })
-		store.set(endSessionAtom, { sessionId: 'done-2', exitCode: 0 })
-		render()
-
-		expect(
-			button('Review')?.querySelector('.rail-badge')?.textContent,
-		).toBe('2')
-	})
-
-	it('hides the badge while nothing needs review', () => {
-		store.set(startSessionAtom, {
-			id: 'live',
-			binary: 'claude',
-			repoPath: '/repo',
-		})
-		render()
-
-		expect(button('Review')?.querySelector('.rail-badge')).toBeNull()
 	})
 
 	it('routes the cockpit to the active session', () => {

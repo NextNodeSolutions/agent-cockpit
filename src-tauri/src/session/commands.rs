@@ -24,6 +24,14 @@ use serde::Deserialize;
 
 fn register_session_ref(repo_path: &Path, session_id: &str) -> Result<(), SessionError> {
     let repo = repo_open(repo_path).map_err(|err| SessionError::SessionRef(err.to_string()))?;
+    // A freshly-init'd repo (no commits) has an unborn HEAD: there is no commit
+    // to anchor a session ref to. That is not a launch failure — the diff view
+    // already treats an unborn base as "no diff" (mizraj_vcs::diff) — so skip
+    // the ref and let the session start instead of tearing it down.
+    if matches!(repo.head(), Err(ref err) if err.code() == mizraj_vcs::git2::ErrorCode::UnbornBranch)
+    {
+        return Ok(());
+    }
     create_session_ref(&repo, session_id)
         .map_err(|err| SessionError::SessionRef(err.to_string()))?;
     Ok(())
@@ -408,6 +416,42 @@ mod tests {
                 let ref_name = format!("refs/mizraj/sessions/{}", id.as_str());
                 repo.find_reference(&ref_name)
                     .expect("session ref should exist after session_create");
+            });
+        }
+
+        #[test]
+        fn starts_session_in_an_unborn_repo_without_a_ref() {
+            let pool = fresh_pool();
+            block_on(async {
+                let manager = SessionManager::new();
+                let dir = TempDir::new().expect("tempdir");
+                // A freshly-init'd repo with no commits: HEAD is unborn, so there
+                // is no commit to anchor a session ref to.
+                let mut opts = RepositoryInitOptions::new();
+                opts.external_template(false);
+                Repository::init_opts(dir.path(), &opts).expect("init unborn repo");
+
+                let id = session_create_inner(
+                    &manager,
+                    &pool,
+                    "sh",
+                    dir.path().to_string_lossy().into_owned(),
+                    no_sinks,
+                )
+                .await
+                .expect("session should start in an unborn repo, not roll back");
+
+                assert!(manager.list_sessions().await.contains(&id));
+
+                let repo = repo_open(dir.path()).expect("repo_open");
+                assert!(
+                    repo.references_glob("refs/mizraj/sessions/*")
+                        .expect("glob")
+                        .names()
+                        .next()
+                        .is_none(),
+                    "an unborn repo should start the session without a ref",
+                );
             });
         }
 

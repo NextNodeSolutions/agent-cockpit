@@ -64,7 +64,7 @@ pub fn projects_add(
     registry: tauri::State<'_, SharedRegistry>,
     watchers: tauri::State<'_, super::watcher::RepoWatchers>,
 ) -> Result<String, String> {
-    let canonical = super::validate_repo_path(&repo_path)?;
+    let canonical = super::validate_repo_for_registration(&repo_path)?;
     if registry.add(canonical.clone())? {
         super::watcher::watch_and_emit(&watchers, &app, &canonical);
     }

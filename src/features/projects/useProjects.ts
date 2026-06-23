@@ -5,6 +5,7 @@ import { useEffect } from 'react'
 
 import { describeError } from '@/shared/errors'
 import { logger } from '@/shared/logger'
+import { pushToast } from '@/shared/toasts'
 
 /**
  * The project registry (every repo the app knows about), shared by all
@@ -39,6 +40,13 @@ const logRegistryError = (operation: string, error: unknown): void => {
 		details: { stack },
 	})
 }
+
+// A non-git folder is the common mistake when adding a project; surface the
+// backend's git rejection as actionable guidance, else a generic failure.
+const addProjectFailureToast = (error: unknown): string =>
+	describeError(error).message.includes('is not a git repository')
+		? 'Not a git repository — choose a folder that contains a .git'
+		: 'Could not add project — see logs'
 
 // The registry is global truth: the first surface to mount loads it, every later
 // surface (picker, pipeline, mission control, ×StrictMode) reuses the atoms
@@ -122,6 +130,7 @@ export const useProjects = (): ProjectsApi => {
 			return canonical
 		} catch (error: unknown) {
 			logRegistryError('projects_add', error)
+			pushToast(addProjectFailureToast(error))
 			return null
 		}
 	}

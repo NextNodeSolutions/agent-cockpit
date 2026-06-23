@@ -38,6 +38,12 @@ export type TitlePayload = {
 	title: string | null
 }
 
+export const AGENT_ACTIVITY_EVENT = 'agent:activity'
+
+export type ActivityPayload = {
+	session_id: string
+}
+
 type SessionsMap = Readonly<Record<string, SessionState>>
 
 export const sessionsAtom = atom<SessionsMap>({})
@@ -106,6 +112,23 @@ export const setCellFrameAtom = atom(
 		set(cellFramesAtom, {
 			...get(cellFramesAtom),
 			[frame.session_id]: frame,
+		})
+	},
+)
+
+type SessionActivityMap = Readonly<Record<string, number>>
+
+// Epoch ms of each session's last observed PTY output, stamped on every
+// `agent:activity` ping. The cockpit measures the quiet span since this to show
+// a session running (output flowing) vs idle (waiting) — see displayStatus.
+export const sessionActivityAtom = atom<SessionActivityMap>({})
+
+export const markSessionActiveAtom = atom(
+	null,
+	(get, set, sessionId: string) => {
+		set(sessionActivityAtom, {
+			...get(sessionActivityAtom),
+			[sessionId]: Date.now(),
 		})
 	},
 )

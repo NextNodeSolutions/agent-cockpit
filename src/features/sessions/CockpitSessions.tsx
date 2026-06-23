@@ -11,11 +11,13 @@ import {
 	sessionDisplayStatus,
 	sessionDotKind,
 } from './displayStatus'
+import type { SessionActivity } from './displayStatus'
 import { launchSession } from './launchSession'
 import { openSession } from './openSession'
 import { sessionLabel, sessionRepoLabel } from './sessionLabel'
 import type { SessionState } from './sessions'
 import { useSessions } from './useSessions'
+import { useSessionActivity } from './useSessionActivity'
 
 const AGENT_BINARY = 'claude'
 
@@ -74,6 +76,7 @@ type RowProps = {
 	active: boolean
 	now: number
 	showRepo: boolean
+	activity: SessionActivity
 }
 
 const SessionRow = ({
@@ -81,6 +84,7 @@ const SessionRow = ({
 	active,
 	now,
 	showRepo,
+	activity,
 }: RowProps): React.JSX.Element => (
 	<a
 		className="lrow"
@@ -94,7 +98,7 @@ const SessionRow = ({
 		}}
 	>
 		<span className="lr-dot">
-			<SDot s={sessionDotKind(session)} />
+			<SDot s={sessionDotKind(session, activity)} />
 		</span>
 		<div style={{ minWidth: 0 }}>
 			{/* TODO(backend): no task/prompt is stored for a session (SessionState has no task field). Render sessionLabel(session) — OSC title or binary basename — as the row title. */}
@@ -110,6 +114,7 @@ type GroupProps = {
 	activeSessionId: string
 	now: number
 	showRepo: boolean
+	activityFor: (sessionId: string) => SessionActivity
 }
 
 const SessionGroup = ({
@@ -118,6 +123,7 @@ const SessionGroup = ({
 	activeSessionId,
 	now,
 	showRepo,
+	activityFor,
 }: GroupProps): React.JSX.Element | null => {
 	if (sessions.length === 0) return null
 	return (
@@ -132,6 +138,7 @@ const SessionGroup = ({
 					active={session.id === activeSessionId}
 					now={now}
 					showRepo={showRepo}
+					activity={activityFor(session.id)}
 				/>
 			))}
 		</>
@@ -149,6 +156,7 @@ export const CockpitSessions = ({
 }: Props): React.JSX.Element => {
 	const sessions = useSessions()
 	const now = useNow(AGE_REFRESH_MS)
+	const activityFor = useSessionActivity()
 	// The cockpit is per-repo (MP2): it follows the active session's repo, so it
 	// lists only that repo's sessions — a sibling repo's agents never bleed in.
 	// Before any repo is followed (null) nothing scopes the list, so show all.
@@ -176,6 +184,7 @@ export const CockpitSessions = ({
 					activeSessionId={activeSessionId}
 					now={now}
 					showRepo={showRepo}
+					activityFor={activityFor}
 				/>
 				<SessionGroup
 					title="Ended"
@@ -183,6 +192,7 @@ export const CockpitSessions = ({
 					activeSessionId={activeSessionId}
 					now={now}
 					showRepo={showRepo}
+					activityFor={activityFor}
 				/>
 			</nav>
 			<div className="fc-sess-foot">

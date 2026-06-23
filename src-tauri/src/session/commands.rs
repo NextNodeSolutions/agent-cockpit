@@ -8,6 +8,7 @@ use tauri::async_runtime::Sender;
 use tauri::{AppHandle, Runtime};
 
 use crate::db::Db;
+use crate::session::activity_sink::ActivitySink;
 use crate::session::cell_frame::CellFrame;
 use crate::session::error::SessionError;
 use crate::session::id::SessionId;
@@ -140,6 +141,7 @@ pub async fn session_create<R: Runtime>(
     session_create_inner(&manager, &pool, &binary, cwd, move |id, pty_input| {
         vec![
             Arc::new(TauriEventSink::new(app.clone(), id.clone())) as Arc<dyn OutputSink>,
+            Arc::new(ActivitySink::new(app.clone(), id.clone())) as Arc<dyn OutputSink>,
             Arc::new(TermSink::new(
                 app,
                 id.clone(),

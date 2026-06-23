@@ -5,15 +5,21 @@ import { describeError } from '@/shared/errors'
 import { logger } from '@/shared/logger'
 
 import {
+	AGENT_ACTIVITY_EVENT,
 	AGENT_CELLS_EVENT,
 	AGENT_END_EVENT,
 	AGENT_TITLE_EVENT,
 	endSessionAtom,
+	markSessionActiveAtom,
 	sessionsAtom,
 	setCellFrameAtom,
 	setSessionTitleAtom,
 } from './sessions'
-import type { SessionEndPayload, TitlePayload } from './sessions'
+import type {
+	ActivityPayload,
+	SessionEndPayload,
+	TitlePayload,
+} from './sessions'
 import type { CellFramePayload } from './terminalWire'
 
 let bridgeStarted = false
@@ -72,6 +78,10 @@ export const startAgentEventsBridge = (): void => {
 			store.set(setSessionTitleAtom, { sessionId: session_id, title })
 		},
 	)
+
+	forwardSessionEvent<ActivityPayload>(AGENT_ACTIVITY_EVENT, ({ session_id }) => {
+		store.set(markSessionActiveAtom, session_id)
+	})
 }
 
 // Test-only escape hatch so suites can verify idempotency from a clean slate.

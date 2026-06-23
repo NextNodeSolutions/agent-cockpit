@@ -12,6 +12,7 @@ import {
 	startAgentEventsBridge,
 } from './agentEventsBridge'
 import {
+	AGENT_ACTIVITY_EVENT,
 	AGENT_CELLS_EVENT,
 	AGENT_END_EVENT,
 	AGENT_TITLE_EVENT,
@@ -96,12 +97,12 @@ describe('startAgentEventsBridge', () => {
 		listenMock.mockResolvedValue(unlistenMock)
 	})
 
-	it('subscribes to agent:end, agent:cells and agent:title exactly once each', () => {
+	it('subscribes to agent:end, agent:cells, agent:title and agent:activity exactly once each', () => {
 		startAgentEventsBridge()
 		startAgentEventsBridge()
 		startAgentEventsBridge()
 
-		expect(listenMock).toHaveBeenCalledTimes(3)
+		expect(listenMock).toHaveBeenCalledTimes(4)
 		expect(listenMock).toHaveBeenNthCalledWith(
 			1,
 			AGENT_END_EVENT,
@@ -115,6 +116,11 @@ describe('startAgentEventsBridge', () => {
 		expect(listenMock).toHaveBeenNthCalledWith(
 			3,
 			AGENT_TITLE_EVENT,
+			expect.any(Function),
+		)
+		expect(listenMock).toHaveBeenNthCalledWith(
+			4,
+			AGENT_ACTIVITY_EVENT,
 			expect.any(Function),
 		)
 	})

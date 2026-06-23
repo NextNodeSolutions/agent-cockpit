@@ -37,7 +37,9 @@ fn config_files_in(dir: &Path) -> [PathBuf; 2] {
 /// roots the loader reads from and the roots the hot-reload watcher observes
 /// (their `themes/` subdirs included, by recursion).
 fn user_config_dirs() -> Vec<PathBuf> {
-    let home = PathBuf::from(std::env::var_os("HOME").unwrap_or_default());
+    // `home_dir()` reads `$HOME`, then falls back to the passwd database
+    // (getpwuid) so a Finder/launchd launch with no `$HOME` still resolves.
+    let home = std::env::home_dir().unwrap_or_default();
     let xdg = std::env::var_os("XDG_CONFIG_HOME").map(PathBuf::from);
     let mut dirs = vec![xdg_ghostty_dir(&home, xdg.as_deref())];
 

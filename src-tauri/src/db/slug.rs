@@ -9,7 +9,9 @@ use mizraj_vcs::{origin_url, repo_open};
 /// `$HOME/Mizraj/<slug>/progress.db`, where `<slug>` identifies the active
 /// project (see [`repo_slug`]).
 pub(super) fn progress_db_path(slug: &str) -> PathBuf {
-    let home = PathBuf::from(std::env::var_os("HOME").unwrap_or_default());
+    // `home_dir()` reads `$HOME`, then falls back to the passwd database
+    // (getpwuid) so a Finder/launchd launch with no `$HOME` still resolves.
+    let home = std::env::home_dir().unwrap_or_default();
     home.join("Mizraj").join(slug).join("progress.db")
 }
 

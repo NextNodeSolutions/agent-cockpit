@@ -7,7 +7,6 @@ mod plans;
 mod project;
 pub mod session;
 mod tasks;
-pub mod worktree;
 
 use tauri::Manager;
 

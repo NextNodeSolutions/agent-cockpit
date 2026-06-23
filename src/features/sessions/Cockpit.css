@@ -102,11 +102,6 @@
 	padding: 5px 12px;
 	border-radius: var(--r-sm);
 }
-/* not in the design: the exit code is real information — keep it */
-.fc-term-exit {
-	font-size: 0.7rem;
-	color: var(--ctp-red);
-}
 .fc-cwd {
 	font-size: calc(var(--fs-mono-sm) - 1px);
 	color: var(--ctp-overlay0);

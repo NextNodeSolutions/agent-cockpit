@@ -5,7 +5,6 @@
      expressed as color-mix over --shadow-ink (see tokens.css);
    - .branch drops the design's letter-spacing (it breaks ligatures in
      mono fonts);
-   - .sdot-fail / .tag-fail cover the app's real 'failed' status axis;
    - .toast and .palette rules are keyed on their state attribute
      ([data-show] / [data-open]) so the v1 classes of the same name keep
      rendering until their screens are migrated.
@@ -255,10 +254,6 @@ button {
 }
 .mz-statbtn:active {
 	transform: scale(0.97);
-}
-.mz-statbtn-rev:hover {
-	background: var(--fill-rev);
-	border-color: color-mix(in srgb, var(--c-rev) 35%, transparent);
 }
 @media (max-width: 1000px) {
 	.mz-statbtn .sl,
@@ -549,22 +544,6 @@ button {
 		opacity: 1;
 	}
 }
-.mz-rail .rail-badge {
-	position: absolute;
-	top: 4px;
-	right: 6px;
-	min-width: 14px;
-	height: 14px;
-	padding: 0 4px;
-	border-radius: 8px;
-	background: var(--ctp-peach);
-	color: var(--on-accent);
-	font-size: 9px;
-	font-weight: 700;
-	display: grid;
-	place-items: center;
-}
-
 /* ---- view container & transitions ---- */
 .mz-views {
 	position: relative;
@@ -690,11 +669,6 @@ button {
 		opacity: 0.4;
 	}
 }
-/* not in the design: the app's status axis also carries 'failed' */
-.sdot-fail {
-	background: var(--c-del);
-	box-shadow: 0 0 8px color-mix(in srgb, var(--c-del) 50%, transparent);
-}
 
 /* ---- tags / chips / stats ---- */
 .tag {
@@ -729,11 +703,6 @@ button {
 .tag-input {
 	background: color-mix(in srgb, var(--c-warn) 16%, transparent);
 	color: color-mix(in srgb, var(--c-warn) 82%, var(--text));
-}
-/* not in the design: companion of .sdot-fail */
-.tag-fail {
-	background: var(--fill-del);
-	color: color-mix(in srgb, var(--c-del) 80%, var(--text));
 }
 
 /* No letter-spacing here (the design had -0.01em): tracking on mono text

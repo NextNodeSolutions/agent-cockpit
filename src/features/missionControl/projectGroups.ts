@@ -5,22 +5,37 @@
  */
 import type { MissionFilter } from '@/app/router'
 import type { SessionDisplayStatus } from '@/features/sessions/displayStatus'
-import { sessionDisplayStatus } from '@/features/sessions/displayStatus'
 import type { SessionState } from '@/features/sessions/sessions'
+
+/** Resolves a session's live display status — injected so this module stays
+ * free of the activity/display-status layer (the wall passes one built from
+ * `useSessionActivity`). */
+export type StatusOf = (session: SessionState) => SessionDisplayStatus
+
+/**
+ * How many sessions resolve to `status` under `statusOf`. Shared by the wall's
+ * filter chips and each project group's header so the two counts can never
+ * drift.
+ */
+export const countByStatus = (
+	sessions: ReadonlyArray<SessionState>,
+	status: SessionDisplayStatus,
+	statusOf: StatusOf,
+): number => sessions.filter(session => statusOf(session) === status).length
 
 const STATUS_ORDER: Readonly<Record<SessionDisplayStatus, number>> = {
 	running: 0,
-	review: 1,
-	failed: 2,
+	needInput: 1,
+	idle: 2,
 }
 
 // Active work first, then most recently started — the cmux "what's hot" wall.
-const compareCards = (a: SessionState, b: SessionState): number => {
-	const byStatus =
-		STATUS_ORDER[sessionDisplayStatus(a)] -
-		STATUS_ORDER[sessionDisplayStatus(b)]
-	return byStatus !== 0 ? byStatus : b.startedAt - a.startedAt
-}
+const compareCards =
+	(statusOf: StatusOf) =>
+	(a: SessionState, b: SessionState): number => {
+		const byStatus = STATUS_ORDER[statusOf(a)] - STATUS_ORDER[statusOf(b)]
+		return byStatus !== 0 ? byStatus : b.startedAt - a.startedAt
+	}
 
 // TODO(backend): project registry — Mission Control only groups live
 // sessions by repoPath; projects with no sessions cannot be listed
@@ -31,6 +46,7 @@ export type SessionGroup = {
 
 export const groupSessionsByRepo = (
 	sessions: ReadonlyArray<SessionState>,
+	statusOf: StatusOf,
 ): ReadonlyArray<SessionGroup> => {
 	const byRepo = new Map<string | null, SessionState[]>()
 	for (const session of sessions) {
@@ -40,7 +56,7 @@ export const groupSessionsByRepo = (
 	}
 	const groups = Array.from(byRepo, ([repoPath, grouped]) => ({
 		repoPath,
-		sessions: grouped.toSorted(compareCards),
+		sessions: grouped.toSorted(compareCards(statusOf)),
 	}))
 	// Repo-less sessions always trail: they are the "no project" bucket.
 	return groups.toSorted(
@@ -113,8 +129,11 @@ export const orderProjectGroups = (
 		return active !== 0 ? active : latestStart(b) - latestStart(a)
 	})
 
-const matchesFilter = (session: SessionState, filter: MissionFilter): boolean =>
-	filter === 'all' || sessionDisplayStatus(session) === filter
+const matchesFilter = (
+	session: SessionState,
+	filter: MissionFilter,
+	statusOf: StatusOf,
+): boolean => filter === 'all' || statusOf(session) === filter
 
 export type VisibleProjectGroup = {
 	group: SessionGroup
@@ -140,6 +159,7 @@ export const visibleProjectGroups = (
 	sessionGroups: ReadonlyArray<SessionGroup>,
 	activeProjectPath: string | null,
 	filter: MissionFilter,
+	statusOf: StatusOf,
 ): VisibleProjectGroups => {
 	const groups = orderProjectGroups(
 		withActiveGroup(sessionGroups, activeProjectPath),
@@ -150,7 +170,7 @@ export const visibleProjectGroups = (
 			group,
 			isActive: group.repoPath === activeProjectPath,
 			visibleSessions: group.sessions.filter(session =>
-				matchesFilter(session, filter),
+				matchesFilter(session, filter, statusOf),
 			),
 		}))
 		.filter(

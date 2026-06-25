@@ -1,26 +1,25 @@
 import { useState } from 'react'
 
 import { useRepoStats } from '@/features/projects/useRepoStats'
-import type { SessionDisplayStatus } from '@/features/sessions/displayStatus'
 import { sessionDisplayStatus } from '@/features/sessions/displayStatus'
 import { launchSession } from '@/features/sessions/launchSession'
 import type { SessionState } from '@/features/sessions/sessions'
+import { useSessionActivity } from '@/features/sessions/useSessionActivity'
 import { SDot } from '@/shared/ui/atoms'
 import { IconPlus } from '@/shared/ui/icons'
 
 import { AgentCard } from './AgentCard'
-import type { SessionGroup } from './projectGroups'
-import { compactPath, projectHue, projectName } from './projectGroups'
+import type { SessionGroup, StatusOf } from './projectGroups'
+import {
+	compactPath,
+	countByStatus,
+	projectHue,
+	projectName,
+} from './projectGroups'
 
 const STAGGER_STEP_MS = 45
 
 const AGENT_BINARY = 'claude'
-
-const countOf = (
-	sessions: ReadonlyArray<SessionState>,
-	status: SessionDisplayStatus,
-): number =>
-	sessions.filter(session => sessionDisplayStatus(session) === status).length
 
 type Props = {
 	group: SessionGroup
@@ -35,6 +34,7 @@ export const ProjectGroup = ({
 }: Props): React.JSX.Element => {
 	// Per-group, not persisted: a fold is a quick "mute this project" gesture.
 	const [collapsed, setCollapsed] = useState(false)
+	const activityFor = useSessionActivity()
 	// A const binding so the null check narrows inside the launch closure.
 	const { repoPath } = group
 	const name = projectName(repoPath)
@@ -44,9 +44,10 @@ export const ProjectGroup = ({
 
 	const toggle = (): void => setCollapsed(current => !current)
 	// Header stats always describe the whole group, never the filtered view.
-	const runningCount = countOf(group.sessions, 'running')
-	const reviewCount = countOf(group.sessions, 'review')
-	const failedCount = countOf(group.sessions, 'failed')
+	const statusOf: StatusOf = session =>
+		sessionDisplayStatus(activityFor(session.id))
+	const runningCount = countByStatus(group.sessions, 'running', statusOf)
+	const idleCount = countByStatus(group.sessions, 'idle', statusOf)
 
 	return (
 		<section
@@ -75,14 +76,9 @@ export const ProjectGroup = ({
 								<SDot s="run" /> {runningCount} running
 							</span>
 						)}
-						{reviewCount > 0 && (
+						{idleCount > 0 && (
 							<span className="ps">
-								<SDot s="rev" /> {reviewCount} review
-							</span>
-						)}
-						{failedCount > 0 && (
-							<span className="ps">
-								<SDot s="fail" /> {failedCount} failed
+								<SDot s="idle" /> {idleCount} idle
 							</span>
 						)}
 						{/* TODO(backend): subagent counts — "{nSub} subagents" as .ps.ps-dim once sessions expose subagents */}

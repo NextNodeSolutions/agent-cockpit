@@ -5,7 +5,6 @@
      expressed as color-mix over --shadow-ink (see tokens.css);
    - .branch drops the design's letter-spacing (it breaks ligatures in
      mono fonts);
-   - .sdot-fail / .tag-fail cover the app's real 'failed' status axis;
    - .toast and .palette rules are keyed on their state attribute
      ([data-show] / [data-open]) so the v1 classes of the same name keep
      rendering until their screens are migrated.
@@ -255,10 +254,6 @@ button {
 }
 .mz-statbtn:active {
 	transform: scale(0.97);
-}
-.mz-statbtn-rev:hover {
-	background: var(--fill-rev);
-	border-color: color-mix(in srgb, var(--c-rev) 35%, transparent);
 }
 @media (max-width: 1000px) {
 	.mz-statbtn .sl,
@@ -549,22 +544,6 @@ button {
 		opacity: 1;
 	}
 }
-.mz-rail .rail-badge {
-	position: absolute;
-	top: 4px;
-	right: 6px;
-	min-width: 14px;
-	height: 14px;
-	padding: 0 4px;
-	border-radius: 8px;
-	background: var(--ctp-peach);
-	color: var(--on-accent);
-	font-size: 9px;
-	font-weight: 700;
-	display: grid;
-	place-items: center;
-}
-
 /* ---- view container & transitions ---- */
 .mz-views {
 	position: relative;
@@ -648,16 +627,21 @@ button {
 	inset: -3px;
 	border-radius: 50%;
 	border: 1.5px solid var(--c-run);
+	/* Promote to its own compositor layer: the scale/opacity pulse then runs
+	   off the main thread, so it stays smooth even while the terminal canvas
+	   repaints (the source of the prior stutter). translateZ in the keyframes
+	   keeps the layer alive across the whole animation. */
+	will-change: transform, opacity;
 	animation: sonar calc(2s / var(--mspd)) ease-out infinite;
 }
 @keyframes sonar {
 	0% {
-		transform: scale(0.5);
+		transform: scale(0.5) translateZ(0);
 		opacity: 0.9;
 	}
 	70%,
 	100% {
-		transform: scale(1.7);
+		transform: scale(1.7) translateZ(0);
 		opacity: 0;
 	}
 }
@@ -668,10 +652,22 @@ button {
 .sdot-done {
 	background: var(--c-done);
 }
-/* not in the design: the app's status axis also carries 'failed' */
-.sdot-fail {
-	background: var(--c-del);
-	box-shadow: 0 0 8px color-mix(in srgb, var(--c-del) 50%, transparent);
+/* idle — alive but not working: a hollow grey ring, no motion */
+.sdot-idle {
+	background: transparent;
+	box-shadow: inset 0 0 0 2px
+		color-mix(in srgb, var(--ctp-overlay0) 70%, transparent);
+}
+/* needs input — blocked on a human answer: a warm dot breathing for attention */
+.sdot-input {
+	background: var(--c-warn);
+	box-shadow: 0 0 8px color-mix(in srgb, var(--c-warn) 55%, transparent);
+	animation: breathe calc(1.6s / var(--mspd)) ease-in-out infinite;
+}
+@keyframes breathe {
+	50% {
+		opacity: 0.4;
+	}
 }
 
 /* ---- tags / chips / stats ---- */
@@ -700,10 +696,13 @@ button {
 	background: var(--fill-accent);
 	color: var(--accent);
 }
-/* not in the design: companion of .sdot-fail */
-.tag-fail {
-	background: var(--fill-del);
-	color: color-mix(in srgb, var(--c-del) 80%, var(--text));
+.tag-idle {
+	background: color-mix(in srgb, var(--ctp-overlay0) 14%, transparent);
+	color: var(--text-3);
+}
+.tag-input {
+	background: color-mix(in srgb, var(--c-warn) 16%, transparent);
+	color: color-mix(in srgb, var(--c-warn) 82%, var(--text));
 }
 
 /* No letter-spacing here (the design had -0.01em): tracking on mono text
@@ -1096,6 +1095,14 @@ html[data-theme='latte'] .toast[data-show] {
 	line-height: 1.3;
 	color: var(--text);
 }
+/* Dot column: a box one title-line tall so the dot centers on the first line
+   of .lr-t — no magic offset, stays aligned at any font size / density. */
+.lrow .lr-dot {
+	flex: none;
+	display: flex;
+	align-items: center;
+	height: calc(var(--fs-sm) * 1.3);
+}
 .lrow svg {
 	width: 14px;
 	height: 14px;
@@ -1140,6 +1147,7 @@ html[data-theme='latte'] .toast[data-show] {
 		animation: none !important;
 	}
 	.sdot-run::after,
+	.sdot-input,
 	.caret {
 		animation: none !important;
 	}

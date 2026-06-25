@@ -9,7 +9,7 @@ mod dto;
 mod watch;
 
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 
 use mizraj_config::{load, Appearance, LoadOptions};
 use notify::RecommendedWatcher;
@@ -17,6 +17,18 @@ use tauri::{AppHandle, Emitter, Runtime};
 
 use dto::{build_dto, GhosttyConfigDto};
 use watch::{spawn_config_watcher, GHOSTTY_CONFIG_CHANGED_EVENT};
+
+/// Absolute path to the app-bundled Ghostty theme corpus, set once at startup
+/// from the Tauri resource dir (see [`set_bundled_themes_dir`]). The corpus is
+/// vendored (`resources/ghostty-themes/`) so `theme = <name>` resolves on any
+/// Mac with no dependency on an installed Ghostty — mizraj is self-contained.
+static BUNDLED_THEMES_DIR: OnceLock<PathBuf> = OnceLock::new();
+
+/// Register the app-bundled theme directory. Called once during Tauri `setup`
+/// with `<resource_dir>/ghostty-themes`; later calls are ignored.
+pub fn set_bundled_themes_dir(dir: PathBuf) {
+    let _ = BUNDLED_THEMES_DIR.set(dir);
+}
 
 /// The directory that holds `$XDG_CONFIG_HOME/ghostty` (defaulting XDG to
 /// `$HOME/.config`).
@@ -37,7 +49,9 @@ fn config_files_in(dir: &Path) -> [PathBuf; 2] {
 /// roots the loader reads from and the roots the hot-reload watcher observes
 /// (their `themes/` subdirs included, by recursion).
 fn user_config_dirs() -> Vec<PathBuf> {
-    let home = PathBuf::from(std::env::var_os("HOME").unwrap_or_default());
+    // `home_dir()` reads `$HOME`, then falls back to the passwd database
+    // (getpwuid) so a Finder/launchd launch with no `$HOME` still resolves.
+    let home = std::env::home_dir().unwrap_or_default();
     let xdg = std::env::var_os("XDG_CONFIG_HOME").map(PathBuf::from);
     let mut dirs = vec![xdg_ghostty_dir(&home, xdg.as_deref())];
 
@@ -52,26 +66,19 @@ fn user_config_dirs() -> Vec<PathBuf> {
     dirs
 }
 
-/// Resolve the Ghostty config files (load order) and theme search dirs from the
-/// environment. macOS adds the Application Support locations and the installed
-/// Ghostty app's bundled themes; Linux adds the system theme dir.
+/// Resolve the Ghostty config files (load order) and theme search dirs. The
+/// user's own `themes/` dirs come first, then the app-bundled corpus
+/// ([`BUNDLED_THEMES_DIR`]) so a named theme always resolves self-contained —
+/// no `/Applications/Ghostty.app` or other external install is consulted.
 fn load_options(appearance: Appearance) -> LoadOptions {
     let config_dirs = user_config_dirs();
     let mut theme_dirs: Vec<PathBuf> = config_dirs.iter().map(|dir| dir.join("themes")).collect();
 
-    #[cfg(target_os = "macos")]
-    {
-        // Best-effort secondary source for a default Ghostty install. This is a
-        // fallback only: M1 bundles the theme corpus inside the app so parity
-        // does not depend on an external Ghostty install or its exact location
-        // (Homebrew Cask, a moved app, … are not covered by this single path).
-        theme_dirs.push(PathBuf::from(
-            "/Applications/Ghostty.app/Contents/Resources/ghostty/themes",
-        ));
-    }
-    #[cfg(target_os = "linux")]
-    {
-        theme_dirs.push(PathBuf::from("/usr/share/ghostty/themes"));
+    // The vendored corpus makes `theme = <name>` resolve identically on every
+    // Mac. Pushed AFTER the user dirs so a user's own theme of the same name
+    // still wins. Absent only in a dev build where the resource dir is unset.
+    if let Some(bundled) = BUNDLED_THEMES_DIR.get() {
+        theme_dirs.push(bundled.clone());
     }
 
     let config_files = config_dirs
@@ -125,6 +132,47 @@ pub fn scrollback_lines() -> usize {
     let lines =
         (limit_bytes / SCROLLBACK_BYTES_PER_LINE).clamp(SCROLLBACK_MIN_LINES, SCROLLBACK_MAX_LINES);
     usize::try_from(lines).unwrap_or(mizraj_term::DEFAULT_MAX_SCROLLBACK_LINES)
+}
+
+/// Map a resolved config color to a terminal RGB, dropping the non-RGB forms
+/// (named X11 colors — not resolved yet — and the `cell-*` runtime specials),
+/// which leave the slot unset so libghostty keeps its built-in default.
+fn term_rgb(color: Option<mizraj_config::Color>) -> Option<mizraj_term::Rgb> {
+    match color {
+        Some(mizraj_config::Color::Rgb(rgb)) => Some(mizraj_term::Rgb::new(rgb.r, rgb.g, rgb.b)),
+        _ => None,
+    }
+}
+
+/// Resolve the default theme colors a newly spawned session should advertise:
+/// the background/foreground/cursor a probing TUI reads (OSC 10/11/12) to pick
+/// its light/dark variant, plus the implied color scheme (DSR `?996n`).
+///
+/// `appearance` is the frontend's live light/dark (see `currentAppearance`), so a
+/// `light:…,dark:…` theme resolves the side the user actually sees — without it
+/// the dark side was always picked, reporting the wrong polarity on a light
+/// terminal. A plain `theme = <name>` resolves identically either way.
+pub fn session_terminal_colors(appearance: &str) -> mizraj_term::DefaultColors {
+    let config = load(&load_options(parse_appearance(appearance)));
+    let background = term_rgb(config.background);
+    mizraj_term::DefaultColors {
+        background,
+        foreground: term_rgb(config.foreground),
+        cursor: term_rgb(config.cursor_color),
+        scheme: mizraj_term::ColorScheme::from_background(background),
+    }
+}
+
+/// The `COLORFGBG` value advertising a resolved scheme as light or dark, for
+/// tools that read the env var instead of querying OSC 11 (the de-facto `fg;bg`
+/// convention — a light `bg` index, here `15`, means a light terminal; `0` a
+/// dark one). Pure: derived from the already-resolved scheme, no config reload —
+/// a belt-and-suspenders complement to the OSC 11 responder.
+pub fn colorfgbg_for(scheme: mizraj_term::ColorScheme) -> &'static str {
+    match scheme {
+        mizraj_term::ColorScheme::Light => "0;15",
+        mizraj_term::ColorScheme::Dark => "15;0",
+    }
 }
 
 /// Load the user's effective Ghostty config for the given system appearance

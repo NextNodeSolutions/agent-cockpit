@@ -13,12 +13,19 @@ use std::ffi::c_void;
 use std::ptr::NonNull;
 
 use mizraj_term_sys::{
-    ghostty_terminal_set, GhosttyDeviceAttributes, GhosttyResult_GHOSTTY_SUCCESS,
-    GhosttyTerminalImpl, GhosttyTerminalOption_GHOSTTY_TERMINAL_OPT_DEVICE_ATTRIBUTES,
+    ghostty_terminal_set, GhosttyColorRgb, GhosttyColorScheme,
+    GhosttyColorScheme_GHOSTTY_COLOR_SCHEME_DARK, GhosttyColorScheme_GHOSTTY_COLOR_SCHEME_LIGHT,
+    GhosttyDeviceAttributes, GhosttyResult_GHOSTTY_SUCCESS, GhosttyTerminalImpl,
+    GhosttyTerminalOption, GhosttyTerminalOption_GHOSTTY_TERMINAL_OPT_COLOR_BACKGROUND,
+    GhosttyTerminalOption_GHOSTTY_TERMINAL_OPT_COLOR_CURSOR,
+    GhosttyTerminalOption_GHOSTTY_TERMINAL_OPT_COLOR_FOREGROUND,
+    GhosttyTerminalOption_GHOSTTY_TERMINAL_OPT_COLOR_SCHEME,
+    GhosttyTerminalOption_GHOSTTY_TERMINAL_OPT_DEVICE_ATTRIBUTES,
     GhosttyTerminalOption_GHOSTTY_TERMINAL_OPT_USERDATA,
     GhosttyTerminalOption_GHOSTTY_TERMINAL_OPT_WRITE_PTY,
 };
 
+use crate::color::{ColorScheme, DefaultColors, Rgb};
 use crate::{Result, TermError};
 
 /// Callback receiving the bytes libghostty wants written back to the PTY.
@@ -28,6 +35,10 @@ pub type PtyWriter = Box<dyn FnMut(&[u8]) + 'static>;
 /// [`drop_callbacks`] after the terminal itself is freed.
 pub(crate) struct TerminalCallbacks {
     writer: PtyWriter,
+    /// The scheme reported to a color-scheme query (DSR `?996n`). Mutated by
+    /// [`set_default_colors`] and read back by [`color_scheme_trampoline`];
+    /// both run on the single terminal-owning thread, so no synchronization.
+    color_scheme: GhosttyColorScheme,
 }
 
 /// Ghostty's own device identity: a VT220 (conformance 62) with ANSI color
@@ -53,6 +64,22 @@ unsafe extern "C" fn write_pty_trampoline(
     let callbacks = unsafe { &mut *userdata.cast::<TerminalCallbacks>() };
     let bytes = unsafe { std::slice::from_raw_parts(data, len) };
     (callbacks.writer)(bytes);
+}
+
+unsafe extern "C" fn color_scheme_trampoline(
+    _terminal: *mut GhosttyTerminalImpl,
+    userdata: *mut c_void,
+    out_scheme: *mut GhosttyColorScheme,
+) -> bool {
+    if userdata.is_null() || out_scheme.is_null() {
+        return false;
+    }
+    // SAFETY: userdata is the Box<TerminalCallbacks> installed alongside this
+    // trampoline and outlives the terminal; out_scheme points at a scheme slot
+    // libghostty owns for the duration of the callback.
+    let callbacks = unsafe { &*userdata.cast::<TerminalCallbacks>() };
+    unsafe { *out_scheme = callbacks.color_scheme };
+    true
 }
 
 unsafe extern "C" fn device_attributes_trampoline(
@@ -86,7 +113,12 @@ pub(crate) fn install_pty_writer(
     handle: NonNull<GhosttyTerminalImpl>,
     writer: PtyWriter,
 ) -> Result<*mut TerminalCallbacks> {
-    let userdata = Box::into_raw(Box::new(TerminalCallbacks { writer }));
+    let userdata = Box::into_raw(Box::new(TerminalCallbacks {
+        writer,
+        // Conservative until the embedder seeds real colors via
+        // `set_default_colors`; a probe before then sees the historical default.
+        color_scheme: GhosttyColorScheme_GHOSTTY_COLOR_SCHEME_DARK,
+    }));
 
     // SAFETY: handle is live (caller guarantee). Callback options take the
     // function pointer directly; USERDATA takes the raw pointer itself. On any
@@ -118,7 +150,18 @@ pub(crate) fn install_pty_writer(
                 )
             };
             if result == GhosttyResult_GHOSTTY_SUCCESS {
-                return Ok(userdata);
+                // SAFETY: as above. The color-scheme callback answers DSR
+                // ?996n from the scheme stored in `userdata`.
+                let result = unsafe {
+                    ghostty_terminal_set(
+                        handle.as_ptr(),
+                        GhosttyTerminalOption_GHOSTTY_TERMINAL_OPT_COLOR_SCHEME,
+                        color_scheme_trampoline as *const c_void,
+                    )
+                };
+                if result == GhosttyResult_GHOSTTY_SUCCESS {
+                    return Ok(userdata);
+                }
             }
         }
     }
@@ -128,6 +171,74 @@ pub(crate) fn install_pty_writer(
     Err(TermError::Init(
         "installing the pty write-back callbacks failed".into(),
     ))
+}
+
+/// Map our scheme to libghostty's enum.
+fn scheme_to_ffi(scheme: ColorScheme) -> GhosttyColorScheme {
+    match scheme {
+        ColorScheme::Light => GhosttyColorScheme_GHOSTTY_COLOR_SCHEME_LIGHT,
+        ColorScheme::Dark => GhosttyColorScheme_GHOSTTY_COLOR_SCHEME_DARK,
+    }
+}
+
+/// Set one default color option, or clear it (pass `None`). The value is copied
+/// synchronously by libghostty, so a stack temporary is sufficient.
+fn set_color(
+    handle: NonNull<GhosttyTerminalImpl>,
+    option: GhosttyTerminalOption,
+    color: Option<Rgb>,
+) -> Result<()> {
+    let rgb = color.map(|c| GhosttyColorRgb {
+        r: c.r,
+        g: c.g,
+        b: c.b,
+    });
+    let value = rgb
+        .as_ref()
+        .map_or(std::ptr::null(), |c| c as *const GhosttyColorRgb)
+        .cast::<c_void>();
+    // SAFETY: `handle` is live (caller guarantee). `value` is either null
+    // (clear) or points at `rgb`, which outlives this synchronous call.
+    let result = unsafe { ghostty_terminal_set(handle.as_ptr(), option, value) };
+    if result != GhosttyResult_GHOSTTY_SUCCESS {
+        return Err(TermError::Init(format!(
+            "ghostty_terminal_set color option {option} returned {result}"
+        )));
+    }
+    Ok(())
+}
+
+/// Seed libghostty's default theme colors (foreground/background/cursor) and the
+/// reported color scheme, so a program probing the terminal (OSC 10/11/12, DSR
+/// ?996n) learns the user's real theme instead of libghostty's built-in dark
+/// default. `userdata` is the pointer from [`install_pty_writer`]; the scheme is
+/// stored there for [`color_scheme_trampoline`] to read.
+pub(crate) fn set_default_colors(
+    handle: NonNull<GhosttyTerminalImpl>,
+    userdata: *mut TerminalCallbacks,
+    colors: &DefaultColors,
+) -> Result<()> {
+    set_color(
+        handle,
+        GhosttyTerminalOption_GHOSTTY_TERMINAL_OPT_COLOR_BACKGROUND,
+        colors.background,
+    )?;
+    set_color(
+        handle,
+        GhosttyTerminalOption_GHOSTTY_TERMINAL_OPT_COLOR_FOREGROUND,
+        colors.foreground,
+    )?;
+    set_color(
+        handle,
+        GhosttyTerminalOption_GHOSTTY_TERMINAL_OPT_COLOR_CURSOR,
+        colors.cursor,
+    )?;
+    if !userdata.is_null() {
+        // SAFETY: `userdata` is the live callbacks box from install_pty_writer,
+        // mutated only here on the terminal-owning thread.
+        unsafe { (*userdata).color_scheme = scheme_to_ffi(colors.scheme) };
+    }
+    Ok(())
 }
 
 /// Release the callback state installed by [`install_pty_writer`]. Must run

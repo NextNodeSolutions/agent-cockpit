@@ -1,28 +1,57 @@
 import type { SDotKind } from '@/shared/ui/atoms'
 
-import type { SessionState } from './sessions'
+/**
+ * The status axis the cockpit UI communicates. Every session in the store is
+ * live (a PTY that exits is dropped, not kept as history), so the axis is the
+ * live sub-state only:
+ * - `running`   — the agent is actively working (process alive, output flowing)
+ * - `idle`      — alive but quiet, not doing anything right now
+ * - `needInput` — paused mid-run, waiting on a human answer
+ *
+ * `running` vs `idle` is driven by PTY output activity: a live session counts as
+ * `running` while output is flowing and flips to `idle` once it has been quiet
+ * for {@link IDLE_AFTER_MS} (the backend's `agent:activity` ping timestamps the
+ * last output; see `sessionActivityAtom`). `needInput` still has no signal — it
+ * needs a shell/agent prompt marker — so a blocked agent currently reads `idle`.
+ */
+export type SessionDisplayStatus = 'running' | 'idle' | 'needInput'
 
 /**
- * The status axis the cockpit UI communicates, derived from raw session
- * state: `running` while the process lives, `review` when it ended cleanly
- * (the agent finished — its changes await review), `failed` on a non-zero or
- * unknown exit.
+ * Quiet span after which a live session is shown `idle` rather than `running`.
+ * Comfortably above the backend's 250ms activity-ping throttle, so continuous
+ * output never momentarily reads as idle between pings.
  */
-export type SessionDisplayStatus = 'running' | 'review' | 'failed'
+export const IDLE_AFTER_MS = 600
+
+export type SessionActivity = {
+	/** Epoch ms of the session's last observed output, or undefined if none. */
+	lastActiveAt: number | undefined
+	/** Current epoch ms, to measure the quiet span against (from `useNow`). */
+	now: number
+}
 
 export const sessionDisplayStatus = (
-	session: SessionState,
+	activity?: SessionActivity,
 ): SessionDisplayStatus => {
-	if (session.status === 'running') return 'running'
-	return session.exitCode === 0 ? 'review' : 'failed'
+	// A live session goes idle once output has been quiet past the threshold.
+	// Without an activity reading (caller passed none, or none seen yet) it
+	// stays optimistically `running` — a just-launched agent is working.
+	if (
+		activity !== undefined &&
+		activity.lastActiveAt !== undefined &&
+		activity.now - activity.lastActiveAt >= IDLE_AFTER_MS
+	) {
+		return 'idle'
+	}
+	return 'running'
 }
 
 export const DISPLAY_STATUS_LABEL: Readonly<
 	Record<SessionDisplayStatus, string>
 > = {
 	running: 'running',
-	review: 'needs review',
-	failed: 'failed',
+	idle: 'idle',
+	needInput: 'needs input',
 }
 
 // The status-dot flavor per display status — the single home for the
@@ -32,9 +61,9 @@ export const DISPLAY_STATUS_DOT: Readonly<
 	Record<SessionDisplayStatus, SDotKind>
 > = {
 	running: 'run',
-	review: 'rev',
-	failed: 'fail',
+	idle: 'idle',
+	needInput: 'input',
 }
 
-export const sessionDotKind = (session: SessionState): SDotKind =>
-	DISPLAY_STATUS_DOT[sessionDisplayStatus(session)]
+export const sessionDotKind = (activity?: SessionActivity): SDotKind =>
+	DISPLAY_STATUS_DOT[sessionDisplayStatus(activity)]

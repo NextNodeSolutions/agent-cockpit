@@ -35,9 +35,9 @@
 	--ease-spring: cubic-bezier(0.34, 1.4, 0.45, 1);
 
 	/* ---- density: cozy defaults ---- */
-	--sp-panel: 18px;
-	--sp-card: 15px;
-	--sp-gap: 14px;
+	--sp-panel: 7px;
+	--sp-card: 8px;
+	--sp-gap: 3px;
 	--h-control: 32px;
 	--fs-body: 13.5px;
 	--fs-sm: 12.5px;
@@ -46,9 +46,9 @@
 }
 
 html[data-density='compact'] {
-	--sp-panel: 12px;
-	--sp-card: 11px;
-	--sp-gap: 10px;
+	--sp-panel: 6px;
+	--sp-card: 7px;
+	--sp-gap: 2px;
 	--h-control: 28px;
 	--fs-body: 12.5px;
 	--fs-sm: 11.5px;

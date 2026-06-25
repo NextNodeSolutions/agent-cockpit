@@ -78,10 +78,10 @@ describe('SplitNew', () => {
 			releaseShell?.('/bin/zsh')
 		})
 
-		expect(invokeMock).toHaveBeenCalledWith('session_create', {
-			binary: '/bin/zsh',
-			cwd: '/repo',
-		})
+		expect(invokeMock).toHaveBeenCalledWith(
+			'session_create',
+			expect.objectContaining({ binary: '/bin/zsh', cwd: '/repo' }),
+		)
 		expect(mainButton()?.textContent).toContain('New terminal')
 		expect(mainButton()?.disabled).toBe(false)
 	})
@@ -125,10 +125,10 @@ describe('SplitNew', () => {
 			claude?.click()
 		})
 
-		expect(invokeMock).toHaveBeenCalledWith('session_create', {
-			binary: 'claude',
-			cwd: '/repo',
-		})
+		expect(invokeMock).toHaveBeenCalledWith(
+			'session_create',
+			expect.objectContaining({ binary: 'claude', cwd: '/repo' }),
+		)
 		expect(
 			container.querySelector('.mz-menu')?.getAttribute('data-open'),
 		).toBe('false')

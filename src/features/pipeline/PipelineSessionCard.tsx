@@ -12,6 +12,7 @@ import type { SessionState } from '@/features/sessions/sessions'
 import { subscribeToCellFrames } from '@/features/sessions/sessionSubscription'
 import { terminalTail } from '@/features/sessions/terminalTail'
 import { useCellFrame } from '@/features/sessions/useCellFrame'
+import { useSessionActivity } from '@/features/sessions/useSessionActivity'
 import { DiffStat, StatusTag } from '@/shared/ui/atoms'
 
 import { TerminalPreview } from './TerminalPreview'
@@ -41,11 +42,16 @@ export const PipelineSessionCard = ({
 	onApprove,
 	onAnimationEnd,
 }: Props): React.JSX.Element => {
-	const status = sessionDisplayStatus(session)
+	// A card in the (parked, currently-empty) Review column carries an approve
+	// handler; every other card is a live session in Running. The live/idle
+	// split below drives only the status tag — a live card always shows its
+	// terminal and Stop, never the ended-session diff.
+	const isReview = onApprove !== undefined
+	const activityFor = useSessionActivity()
+	const status = sessionDisplayStatus(activityFor(session.id))
 	const frame = useCellFrame(session.id)
 	const tail = terminalTail(frame, TAIL_LINES)
-	const running = status === 'running'
-	const stat = useWorkingTreeTotals(running ? null : session.repoPath)
+	const stat = useWorkingTreeTotals(isReview ? session.repoPath : null)
 	//TODO: per-session branch — SessionState has no branch (sessions run
 	// directly in repoPath; worktree.rs spawn_worktree is unused by
 	// session_create and repo_head only resolves the active project).
@@ -79,8 +85,8 @@ export const PipelineSessionCard = ({
 				)}
 			</div>
 			<p className="pipeline__title">{sessionLabel(session)}</p>
-			{running && <TerminalPreview tail={tail} />}
-			{!running && stat !== null && (
+			{!isReview && <TerminalPreview tail={tail} />}
+			{isReview && stat !== null && (
 				<DiffStat
 					add={stat.additions}
 					del={stat.deletions}
@@ -88,7 +94,7 @@ export const PipelineSessionCard = ({
 				/>
 			)}
 			<div className="pipeline__card-actions">
-				{status === 'review' ? (
+				{isReview ? (
 					<>
 						<button
 							type="button"
@@ -119,7 +125,7 @@ export const PipelineSessionCard = ({
 						Open
 					</button>
 				)}
-				{running && (
+				{!isReview && (
 					<button
 						type="button"
 						className="btn btn-ghost btn-sm"

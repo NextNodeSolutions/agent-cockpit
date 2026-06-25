@@ -50,7 +50,7 @@ vi.mock('./SplitTreeView', () => ({
 }))
 
 import { AgentRun } from './AgentRun'
-import { endSessionAtom, sessionsAtom, startSessionAtom } from './sessions'
+import { sessionsAtom, startSessionAtom } from './sessions'
 
 const store = getDefaultStore()
 
@@ -76,18 +76,12 @@ describe('AgentRun cockpit', () => {
 		container.remove()
 	})
 
-	const seed = (id: string, ended?: { exitCode: number }): void => {
+	const seed = (id: string): void => {
 		store.set(startSessionAtom, {
 			id,
 			binary: 'claude',
 			repoPath: '/repo/mizraj',
 		})
-		if (ended) {
-			store.set(endSessionAtom, {
-				sessionId: id,
-				exitCode: ended.exitCode,
-			})
-		}
 	}
 
 	const render = async (
@@ -180,17 +174,13 @@ describe('AgentRun cockpit', () => {
 		expect(pushToastMock).toHaveBeenCalledWith('Session stopped')
 	})
 
-	it('disables stop and shows the exit code once ended', async () => {
-		seed('sess-1', { exitCode: 3 })
-		await render('sess-1')
+	it('disables stop when the session no longer exists', async () => {
+		await render('ghost')
 
 		const stop = Array.from(
 			container.querySelectorAll<HTMLButtonElement>('button'),
 		).find(button => button.textContent?.includes('Stop'))
 		expect(stop?.disabled).toBe(true)
-		expect(container.querySelector('.fc-term-exit')?.textContent).toBe(
-			'exit 3',
-		)
 	})
 
 	it('opens the full review from the diff dock', async () => {

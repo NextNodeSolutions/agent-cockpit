@@ -32,16 +32,14 @@ const task = (id: string, status: Task['status']): Task => ({
 
 const session = (
 	id: string,
-	status: SessionState['status'],
-	exitCode: number | null = null,
+	overrides: Partial<SessionState> = {},
 ): SessionState => ({
 	id,
 	binary: 'claude',
 	repoPath: '/repo',
 	title: null,
-	status,
-	exitCode,
 	startedAt: 0,
+	...overrides,
 })
 
 const overview = (
@@ -63,10 +61,8 @@ const overview = (
 
 const NONE_APPROVED: ReadonlySet<string> = new Set()
 
-const isReviewable = (ended: SessionState): boolean => ended.exitCode === 0
-
 describe('pipelineColumns', () => {
-	it('routes tasks and sessions to their columns', () => {
+	it('routes tasks to their columns and every session to running', () => {
 		const columns = pipelineColumns(
 			[
 				overview(
@@ -78,7 +74,7 @@ describe('pipelineColumns', () => {
 					[task('u', 'backlog')],
 				),
 			],
-			[session('run', 'running'), session('rev', 'ended', 0)],
+			[session('run'), session('two')],
 			NONE_APPROVED,
 		)
 
@@ -86,20 +82,20 @@ describe('pipelineColumns', () => {
 		expect(columns.inProgressTasks.map(entry => entry.task.id)).toEqual([
 			'b',
 		])
-		expect(columns.runningSessions.map(s => s.id)).toEqual(['run'])
-		expect(columns.endedSessions.map(s => s.id)).toEqual(['rev'])
+		expect(columns.runningSessions.map(s => s.id)).toEqual(['run', 'two'])
 		expect(columns.done.map(entry => entry.task.id)).toEqual(['c'])
 	})
 
-	it('moves approved ended sessions from review to done', () => {
+	it('keeps the review and done-session columns empty — every session is live', () => {
 		const columns = pipelineColumns(
 			[],
-			[session('kept', 'ended', 0), session('merged', 'ended', 0)],
-			new Set(['merged']),
+			[session('a'), session('b')],
+			new Set(['b']),
 		)
 
-		expect(columns.endedSessions.map(s => s.id)).toEqual(['kept'])
-		expect(columns.doneSessions.map(s => s.id)).toEqual(['merged'])
+		expect(columns.runningSessions.map(s => s.id)).toEqual(['a', 'b'])
+		expect(columns.endedSessions).toEqual([])
+		expect(columns.doneSessions).toEqual([])
 	})
 
 	it('keeps blocked tasks visible in the backlog', () => {
@@ -148,8 +144,8 @@ describe('pipelineColumns', () => {
 
 	it('groups a column by repo, sessions first, first-seen order', () => {
 		const sessions = [
-			{ ...session('s1', 'running'), repoPath: '/repo/beta' },
-			{ ...session('s2', 'running'), repoPath: '/repo/alpha' },
+			session('s1', { repoPath: '/repo/beta' }),
+			session('s2', { repoPath: '/repo/alpha' }),
 		]
 		const entries = [
 			{
@@ -169,11 +165,7 @@ describe('pipelineColumns', () => {
 	})
 
 	it('handles no overview at all', () => {
-		const columns = pipelineColumns(
-			[],
-			[session('run', 'running')],
-			NONE_APPROVED,
-		)
+		const columns = pipelineColumns([], [session('run')], NONE_APPROVED)
 
 		expect(columns.backlog).toEqual([])
 		expect(columns.runningSessions.map(s => s.id)).toEqual(['run'])
@@ -181,44 +173,22 @@ describe('pipelineColumns', () => {
 })
 
 describe('primaryApproveSessionId', () => {
-	const ofRepo = (
-		id: string,
-		repoPath: string,
-		exitCode: number,
-	): SessionState => ({
-		...session(id, 'ended', exitCode),
-		repoPath,
+	const ofRepo = (id: string, repoPath: string): SessionState =>
+		session(id, { repoPath })
+
+	it('returns null for an empty column — the parked steady state', () => {
+		expect(primaryApproveSessionId([])).toBeNull()
 	})
 
-	it('targets the first reviewable card of the first repo group', () => {
-		// Flat order puts beta's reviewable first, but alpha's group is seen
-		// first (its failed card), so alpha's reviewable owns the primary.
+	it('targets the first card of the first repo group, not the flat order', () => {
+		// beta is seen first in the flat order, so its group leads and its first
+		// card owns the primary Approve — even though alpha's card trails it.
 		const ended = [
-			ofRepo('alpha-fail', '/repo/alpha', 2),
-			ofRepo('beta-review', '/repo/beta', 0),
-			ofRepo('alpha-review', '/repo/alpha', 0),
+			ofRepo('beta-1', '/repo/beta'),
+			ofRepo('alpha-1', '/repo/alpha'),
+			ofRepo('beta-2', '/repo/beta'),
 		]
 
-		expect(primaryApproveSessionId(ended, isReviewable)).toBe(
-			'alpha-review',
-		)
-	})
-
-	it('skips a group with no reviewable card', () => {
-		const ended = [
-			ofRepo('alpha-fail', '/repo/alpha', 2),
-			ofRepo('beta-review', '/repo/beta', 0),
-		]
-
-		expect(primaryApproveSessionId(ended, isReviewable)).toBe('beta-review')
-	})
-
-	it('returns null when nothing is reviewable', () => {
-		const ended = [
-			ofRepo('alpha-fail', '/repo/alpha', 2),
-			ofRepo('beta-fail', '/repo/beta', 1),
-		]
-
-		expect(primaryApproveSessionId(ended, isReviewable)).toBe(null)
+		expect(primaryApproveSessionId(ended)).toBe('beta-1')
 	})
 })

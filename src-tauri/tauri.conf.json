@@ -27,7 +27,11 @@
 		"active": true,
 		"targets": "all",
 		"createUpdaterArtifacts": true,
+		"resources": {
+			"resources/ghostty-themes/*": "ghostty-themes/"
+		},
 		"macOS": {
+			"minimumSystemVersion": "13.2",
 			"signingIdentity": "-",
 			"entitlements": "Entitlements.plist",
 			"frameworks": ["../target/libghostty/libghostty.dylib"]

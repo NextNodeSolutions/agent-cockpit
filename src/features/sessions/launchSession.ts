@@ -2,14 +2,33 @@ import { invoke } from '@tauri-apps/api/core'
 import { getDefaultStore } from 'jotai'
 
 import { agentRunHref, navigate } from '@/app/router'
-import { describeError } from '@/shared/errors'
+import { currentAppearance } from '@/features/settings/useAppearance'
+import { describeError, isSessionError } from '@/shared/errors'
 import { logger } from '@/shared/logger'
+import { pushToast } from '@/shared/toasts'
 
 import { startSessionAtom } from './sessions'
 
 type LaunchArgs = {
 	binary: string
 	repoPath: string
+}
+
+// A one-line, actionable toast for a failed launch. The most common fresh-
+// machine case — the agent binary isn't installed — gets install guidance;
+// a non-git cwd and everything else point at the logs.
+const launchFailureToast = (error: unknown, binary: string): string => {
+	if (isSessionError(error)) {
+		if (error.kind === 'binary_not_found') {
+			return error.binary === 'claude'
+				? 'Claude CLI not found — install it (npm i -g @anthropic-ai/claude-code) and relaunch'
+				: `Binary not found on PATH: ${error.binary}`
+		}
+		if (error.kind === 'session_ref') {
+			return 'This folder is not a git repository — cannot launch an agent here'
+		}
+	}
+	return `Could not launch ${binary} — see logs`
 }
 
 // Spawn a session and register it in the store, returning its id (null on a
@@ -22,6 +41,9 @@ export const spawnSession = async ({
 		const sessionId = await invoke<string>('session_create', {
 			binary,
 			cwd: repoPath,
+			// Resolved light/dark so the backend seeds the terminal's theme colors
+			// for what the user sees, not a hardcoded dark default.
+			appearance: currentAppearance(),
 		})
 		getDefaultStore().set(startSessionAtom, {
 			id: sessionId,
@@ -35,6 +57,10 @@ export const spawnSession = async ({
 			scope: 'run-agent',
 			details: { stack, repoPath, binary },
 		})
+		// The button only clears its pending state, so without this the primary
+		// action looks broken on a no-Claude machine. One toast here covers every
+		// call site (Run agent, split panes, palette, …).
+		pushToast(launchFailureToast(error, binary))
 		return null
 	}
 }

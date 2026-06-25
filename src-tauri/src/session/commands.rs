@@ -2,12 +2,11 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use mizraj_vcs::{create_session_ref, main_workdir, repo_open};
-use sqlx::SqlitePool;
+use mizraj_vcs::{create_session_ref, repo_open};
 use tauri::async_runtime::Sender;
 use tauri::{AppHandle, Runtime};
 
-use crate::db::Db;
+use crate::session::activity_sink::ActivitySink;
 use crate::session::cell_frame::CellFrame;
 use crate::session::error::SessionError;
 use crate::session::id::SessionId;
@@ -16,7 +15,6 @@ use crate::session::manager::SessionManager;
 use crate::session::mouse::MouseEventDto;
 use crate::session::path;
 use crate::session::sink::OutputSink;
-use crate::session::store::{delete_session_row, insert_session_row};
 use crate::session::tauri_sink::TauriEventSink;
 use crate::session::term_sink::TermSink;
 use mizraj_term::ScrollViewport;
@@ -24,6 +22,14 @@ use serde::Deserialize;
 
 fn register_session_ref(repo_path: &Path, session_id: &str) -> Result<(), SessionError> {
     let repo = repo_open(repo_path).map_err(|err| SessionError::SessionRef(err.to_string()))?;
+    // A freshly-init'd repo (no commits) has an unborn HEAD: there is no commit
+    // to anchor a session ref to. That is not a launch failure — the diff view
+    // already treats an unborn base as "no diff" (mizraj_vcs::diff) — so skip
+    // the ref and let the session start instead of tearing it down.
+    if matches!(repo.head(), Err(ref err) if err.code() == mizraj_vcs::git2::ErrorCode::UnbornBranch)
+    {
+        return Ok(());
+    }
     create_session_ref(&repo, session_id)
         .map_err(|err| SessionError::SessionRef(err.to_string()))?;
     Ok(())
@@ -42,9 +48,9 @@ async fn rollback_session_close(manager: &SessionManager, id: &SessionId, contex
 
 async fn session_create_inner<F>(
     manager: &SessionManager,
-    pool: &SqlitePool,
     binary: &str,
     cwd: String,
+    colorfgbg: &str,
     sink_factory: F,
 ) -> Result<SessionId, SessionError>
 where
@@ -52,82 +58,53 @@ where
 {
     let binary_path = path::resolve(binary)?;
     let cwd_path = PathBuf::from(cwd);
-    let env: HashMap<String, String> = HashMap::new();
+    // Advertise the resolved terminal's light/dark polarity so a child that
+    // reads COLORFGBG (rather than querying OSC 11) still picks the right theme.
+    let env: HashMap<String, String> =
+        HashMap::from([("COLORFGBG".to_string(), colorfgbg.to_string())]);
 
     let id = manager
         .create_session(binary_path, cwd_path.clone(), env, sink_factory)
         .await?;
 
-    // Insert BEFORE the git ref so rollback only undoes a DB row (cheap,
-    // reversible) and a PTY, never a half-written ref.
-    if let Err(err) = insert_session_row(pool, &id, &cwd_path).await {
-        rollback_session_close(manager, &id, "after db insert error").await;
-        return Err(err);
-    }
-
     // Register the session ref so `diff_session` resolves later. If the cwd
-    // isn't a git repo or the ref clashes, tear down the just-spawned PTY
-    // and delete the row so the diff view never sees a half-wired session.
+    // isn't a git repo or the ref clashes, tear down the just-spawned PTY so the
+    // diff view never sees a half-wired session. No DB row is written: the
+    // `agent_sessions` table is never read (the diff resolves off the git ref),
+    // so session launch no longer depends on the per-project progress.db.
     if let Err(err) = register_session_ref(&cwd_path, id.as_str()) {
         rollback_session_close(manager, &id, "after session_ref registration error").await;
-        if let Err(del_err) = delete_session_row(pool, &id).await {
-            tracing::warn!(
-                session_id = id.as_str(),
-                error = %del_err,
-                "rollback DELETE failed after session_ref registration error",
-            );
-        }
         return Err(err);
     }
 
     Ok(id)
 }
 
-/// Resolve the progress database key for a session's `cwd`: canonicalize it,
-/// then resolve it to the repository's **main** working directory. A linked
-/// worktree thus shares the main repo's `progress.db` that `tasks_overview`
-/// reads, instead of opening a sibling database keyed by the worktree path. If
-/// `cwd` isn't inside a repo (or its layout can't be resolved), fall back to the
-/// canonicalized `cwd`. Rejects a blank or non-existent `cwd`.
-fn resolve_pool_key(cwd: &str) -> Result<PathBuf, SessionError> {
-    let trimmed = cwd.trim();
-    if trimmed.is_empty() {
-        return Err(SessionError::Database("cwd must not be empty".to_string()));
-    }
-    let canonical = PathBuf::from(trimmed)
-        .canonicalize()
-        .map_err(|err| SessionError::Database(format!("canonicalize cwd {trimmed}: {err}")))?;
-    Ok(main_workdir(&canonical).unwrap_or(canonical))
-}
-
 #[tauri::command]
 pub async fn session_create<R: Runtime>(
     binary: String,
     cwd: String,
+    // The frontend's resolved light/dark; absent (older callers) falls back to
+    // dark inside `session_terminal_colors`. Drives the seeded theme colors and
+    // COLORFGBG so a probing TUI detects the terminal the user actually sees.
+    appearance: Option<String>,
     app: AppHandle<R>,
     manager: tauri::State<'_, SessionManager>,
-    db: tauri::State<'_, Db>,
 ) -> Result<SessionId, SessionError> {
-    // The session row lives in its own repo's progress.db — sessions on repo B
-    // never write into repo A's database, whatever the active project is. The
-    // pool is keyed by the repo's MAIN working dir so a linked worktree shares
-    // the main checkout's progress.db (the one tasks_overview reads).
-    // resolve_pool_key canonicalizes and opens the repo via git2 (both
-    // blocking); run it off the async worker like db.rs's slug lookup does.
-    let cwd_for_key = cwd.clone();
-    let pool_key = tauri::async_runtime::spawn_blocking(move || resolve_pool_key(&cwd_for_key))
-        .await
-        .map_err(|err| SessionError::Database(format!("resolve_pool_key task failed: {err}")))??;
-    let pool = db
-        .pool_for(&pool_key)
-        .await
-        .map_err(SessionError::Database)?;
     let scrollback_lines = crate::ghostty::scrollback_lines();
-    session_create_inner(&manager, &pool, &binary, cwd, move |id, pty_input| {
+    let colors = crate::ghostty::session_terminal_colors(appearance.as_deref().unwrap_or("dark"));
+    let colorfgbg = crate::ghostty::colorfgbg_for(colors.scheme);
+    session_create_inner(&manager, &binary, cwd, colorfgbg, move |id, pty_input| {
         vec![
             Arc::new(TauriEventSink::new(app.clone(), id.clone())) as Arc<dyn OutputSink>,
-            Arc::new(TermSink::new(app, id.clone(), pty_input, scrollback_lines))
-                as Arc<dyn OutputSink>,
+            Arc::new(ActivitySink::new(app.clone(), id.clone())) as Arc<dyn OutputSink>,
+            Arc::new(TermSink::new(
+                app,
+                id.clone(),
+                pty_input,
+                scrollback_lines,
+                colors,
+            )) as Arc<dyn OutputSink>,
         ]
     })
     .await
@@ -306,32 +283,19 @@ mod tests {
 
     use super::*;
 
-    fn fresh_pool() -> sqlx::SqlitePool {
-        block_on(crate::db::connect_for_test())
-    }
-
-    async fn count_sessions(pool: &sqlx::SqlitePool) -> i64 {
-        let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM agent_sessions")
-            .fetch_one(pool)
-            .await
-            .expect("count agent_sessions");
-        count
-    }
-
     fn no_sinks(_: &SessionId, _: Sender<Vec<u8>>) -> Vec<Arc<dyn OutputSink>> {
         Vec::new()
     }
 
     #[test]
     fn returns_binary_not_found_when_binary_missing() {
-        let pool = fresh_pool();
         block_on(async {
             let manager = SessionManager::new();
             let err = session_create_inner(
                 &manager,
-                &pool,
                 "nope-not-a-real-binary-xyz",
                 "/tmp".to_string(),
+                "15;0",
                 no_sinks,
             )
             .await
@@ -342,8 +306,10 @@ mod tests {
                 }
                 other => panic!("expected BinaryNotFound, got {other:?}"),
             }
-            // Spawn failure must not leave an orphan row.
-            assert_eq!(count_sessions(&pool).await, 0);
+            assert!(
+                manager.list_sessions().await.is_empty(),
+                "a failed spawn must not register a session"
+            );
         });
     }
 
@@ -385,7 +351,6 @@ mod tests {
 
         #[test]
         fn spawns_session_and_registers_session_ref() {
-            let pool = fresh_pool();
             block_on(async {
                 let manager = SessionManager::new();
                 let dir = TempDir::new().expect("tempdir");
@@ -393,9 +358,9 @@ mod tests {
 
                 let id = session_create_inner(
                     &manager,
-                    &pool,
                     "sh",
                     dir.path().to_string_lossy().into_owned(),
+                    "15;0",
                     no_sinks,
                 )
                 .await
@@ -412,8 +377,42 @@ mod tests {
         }
 
         #[test]
+        fn starts_session_in_an_unborn_repo_without_a_ref() {
+            block_on(async {
+                let manager = SessionManager::new();
+                let dir = TempDir::new().expect("tempdir");
+                // A freshly-init'd repo with no commits: HEAD is unborn, so there
+                // is no commit to anchor a session ref to.
+                let mut opts = RepositoryInitOptions::new();
+                opts.external_template(false);
+                Repository::init_opts(dir.path(), &opts).expect("init unborn repo");
+
+                let id = session_create_inner(
+                    &manager,
+                    "sh",
+                    dir.path().to_string_lossy().into_owned(),
+                    "15;0",
+                    no_sinks,
+                )
+                .await
+                .expect("session should start in an unborn repo, not roll back");
+
+                assert!(manager.list_sessions().await.contains(&id));
+
+                let repo = repo_open(dir.path()).expect("repo_open");
+                assert!(
+                    repo.references_glob("refs/mizraj/sessions/*")
+                        .expect("glob")
+                        .names()
+                        .next()
+                        .is_none(),
+                    "an unborn repo should start the session without a ref",
+                );
+            });
+        }
+
+        #[test]
         fn rolls_back_spawn_when_cwd_is_not_a_git_repo() {
-            let pool = fresh_pool();
             block_on(async {
                 let manager = SessionManager::new();
                 let dir = TempDir::new().expect("tempdir");
@@ -421,9 +420,9 @@ mod tests {
 
                 let err = session_create_inner(
                     &manager,
-                    &pool,
                     "sh",
                     dir.path().to_string_lossy().into_owned(),
+                    "15;0",
                     no_sinks,
                 )
                 .await
@@ -434,58 +433,11 @@ mod tests {
                     other => panic!("expected SessionRef, got {other:?}"),
                 }
 
-                // Roll back happened: registry is empty.
+                // Roll back happened: the PTY is torn down, registry is empty.
                 assert!(
                     manager.list_sessions().await.is_empty(),
                     "session must be unregistered after ref failure"
                 );
-                // ref-registration failure must also delete the inserted row.
-                assert_eq!(count_sessions(&pool).await, 0);
-            });
-        }
-
-        #[test]
-        fn inserts_running_row_into_agent_sessions() {
-            let pool = fresh_pool();
-            block_on(async {
-                let manager = SessionManager::new();
-                let dir = TempDir::new().expect("tempdir");
-                init_repo_with_commit(dir.path());
-                let cwd = dir.path().to_string_lossy().into_owned();
-
-                let id = session_create_inner(&manager, &pool, "sh", cwd.clone(), no_sinks)
-                    .await
-                    .expect("session_create should succeed");
-
-                let row: (
-                    String,
-                    String,
-                    String,
-                    String,
-                    String,
-                    String,
-                    Option<String>,
-                ) = sqlx::query_as(
-                    "SELECT id, repo_path, worktree_path, ref_name, started_at, status, ended_at \
-                     FROM agent_sessions WHERE id = ?",
-                )
-                .bind(id.as_str())
-                .fetch_one(&pool)
-                .await
-                .expect("inserted row should be fetchable");
-
-                assert_eq!(row.0, id.as_str());
-                assert_eq!(row.1, cwd);
-                assert_eq!(row.2, cwd);
-                assert_eq!(row.3, format!("refs/mizraj/sessions/{}", id.as_str()));
-                assert!(
-                    row.4.contains('T') && row.4.ends_with('Z'),
-                    "started_at should be ISO 8601 UTC, got {}",
-                    row.4
-                );
-                assert_eq!(row.5, "running");
-                assert!(row.6.is_none(), "ended_at should be NULL on insert");
-                assert_eq!(count_sessions(&pool).await, 1);
             });
         }
     }

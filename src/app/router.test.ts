@@ -32,16 +32,14 @@ describe('mission control route', () => {
 
 	it('deep-links a status filter through the query string', () => {
 		expect(missionControlHref('running')).toBe('/?filter=running')
-		expect(missionControlHref('review')).toBe('/?filter=review')
-		expect(missionControlHref('failed')).toBe('/?filter=failed')
+		expect(missionControlHref('idle')).toBe('/?filter=idle')
 	})
 })
 
 describe('mission filter param', () => {
 	it('parses a valid filter from a search string', () => {
 		expect(parseMissionFilter('?filter=running')).toBe('running')
-		expect(parseMissionFilter('?filter=review')).toBe('review')
-		expect(parseMissionFilter('?filter=failed')).toBe('failed')
+		expect(parseMissionFilter('?filter=idle')).toBe('idle')
 	})
 
 	it('falls back to all on anything else', () => {

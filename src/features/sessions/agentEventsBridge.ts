@@ -3,17 +3,26 @@ import { getDefaultStore } from 'jotai'
 
 import { describeError } from '@/shared/errors'
 import { logger } from '@/shared/logger'
+import { pushToast } from '@/shared/toasts'
 
+import { consumeIntentionalClose, crashToast } from './sessionExit'
+import { sessionLabel } from './sessionLabel'
 import {
+	AGENT_ACTIVITY_EVENT,
 	AGENT_CELLS_EVENT,
 	AGENT_END_EVENT,
 	AGENT_TITLE_EVENT,
-	endSessionAtom,
+	markSessionActiveAtom,
+	removeSessionAtom,
 	sessionsAtom,
 	setCellFrameAtom,
 	setSessionTitleAtom,
 } from './sessions'
-import type { SessionEndPayload, TitlePayload } from './sessions'
+import type {
+	ActivityPayload,
+	SessionEndPayload,
+	TitlePayload,
+} from './sessions'
 import type { CellFramePayload } from './terminalWire'
 
 let bridgeStarted = false
@@ -55,10 +64,18 @@ export const startAgentEventsBridge = (): void => {
 	forwardSessionEvent<SessionEndPayload>(
 		AGENT_END_EVENT,
 		({ session_id, exit_code }) => {
-			store.set(endSessionAtom, {
-				sessionId: session_id,
-				exitCode: exit_code,
-			})
+			// The session is still in the store here (the unknown-session guard
+			// above passed), so resolve its label before dropping it. A user
+			// stop is expected; only an unexpected non-zero exit toasts.
+			if (!consumeIntentionalClose(session_id)) {
+				const session = store.get(sessionsAtom)[session_id]
+				const toast =
+					session === undefined
+						? null
+						: crashToast(sessionLabel(session), exit_code)
+				if (toast !== null) pushToast(toast)
+			}
+			store.set(removeSessionAtom, session_id)
 		},
 	)
 
@@ -70,6 +87,13 @@ export const startAgentEventsBridge = (): void => {
 		AGENT_TITLE_EVENT,
 		({ session_id, title }) => {
 			store.set(setSessionTitleAtom, { sessionId: session_id, title })
+		},
+	)
+
+	forwardSessionEvent<ActivityPayload>(
+		AGENT_ACTIVITY_EVENT,
+		({ session_id }) => {
+			store.set(markSessionActiveAtom, session_id)
 		},
 	)
 }

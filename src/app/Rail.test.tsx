@@ -6,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import {
 	activeSessionIdAtom,
-	endSessionAtom,
 	sessionsAtom,
 	startSessionAtom,
 } from '@/features/sessions/sessions'
@@ -46,35 +45,32 @@ describe('Rail', () => {
 			`.mz-railbtn[aria-label="${label}"]`,
 		)
 
-	it('offers the five views with icon and label', () => {
+	// parked-views: Board and Plans are hidden from the rail (see shellViews.tsx).
+	// When they return, re-add 'Board'/'Plans' to the labels list (length 5) and
+	// restore the /plans deep-link active-state case removed below.
+	it('offers the three active views with icon and label', () => {
 		render()
 
 		const labels = Array.from(
 			container.querySelectorAll('.mz-rail .mz-railbtn .rl'),
 		).map(label => label.textContent)
-		expect(labels).toEqual([
-			'Agents',
-			'Cockpit',
-			'Board',
-			'Plans',
-			'Review',
-		])
-		expect(container.querySelectorAll('.mz-railbtn svg')).toHaveLength(5)
+		expect(labels).toEqual(['Agents', 'Cockpit', 'Review'])
+		expect(container.querySelectorAll('.mz-railbtn svg')).toHaveLength(3)
 	})
 
-	it('marks the view owning the current route, including deep links', () => {
-		window.history.pushState({}, '', '/plans/plan/auth')
+	it('marks the view owning the current route', () => {
+		window.history.pushState({}, '', '/review')
 		render()
 
-		expect(button('Plans')?.getAttribute('data-on')).toBe('true')
+		expect(button('Review')?.getAttribute('data-on')).toBe('true')
 		expect(button('Agents')?.getAttribute('data-on')).toBe('false')
 
 		act(() => {
-			button('Review')?.click()
+			button('Agents')?.click()
 		})
 
-		expect(button('Review')?.getAttribute('data-on')).toBe('true')
-		expect(button('Plans')?.getAttribute('data-on')).toBe('false')
+		expect(button('Agents')?.getAttribute('data-on')).toBe('true')
+		expect(button('Review')?.getAttribute('data-on')).toBe('false')
 	})
 
 	it('claims the cockpit on both session panes and the empty state', () => {
@@ -87,37 +83,6 @@ describe('Rail', () => {
 			window.dispatchEvent(new PopStateEvent('popstate'))
 		})
 		expect(button('Cockpit')?.getAttribute('data-on')).toBe('true')
-	})
-
-	it('badges the review button with the needs-review count', () => {
-		store.set(startSessionAtom, {
-			id: 'done-1',
-			binary: 'claude',
-			repoPath: '/repo',
-		})
-		store.set(startSessionAtom, {
-			id: 'done-2',
-			binary: 'claude',
-			repoPath: '/repo',
-		})
-		store.set(endSessionAtom, { sessionId: 'done-1', exitCode: 0 })
-		store.set(endSessionAtom, { sessionId: 'done-2', exitCode: 0 })
-		render()
-
-		expect(
-			button('Review')?.querySelector('.rail-badge')?.textContent,
-		).toBe('2')
-	})
-
-	it('hides the badge while nothing needs review', () => {
-		store.set(startSessionAtom, {
-			id: 'live',
-			binary: 'claude',
-			repoPath: '/repo',
-		})
-		render()
-
-		expect(button('Review')?.querySelector('.rail-badge')).toBeNull()
 	})
 
 	it('routes the cockpit to the active session', () => {
@@ -151,18 +116,10 @@ describe('Rail', () => {
 		expect(window.location.pathname).toBe('/agent-run')
 	})
 
+	// parked-views: Board (→ /pipeline) and Plans (→ /plans) clicks were removed
+	// with their rail buttons; restore them here when the entries come back.
 	it('navigates to each static view', () => {
 		render()
-
-		act(() => {
-			button('Board')?.click()
-		})
-		expect(window.location.pathname).toBe('/pipeline')
-
-		act(() => {
-			button('Plans')?.click()
-		})
-		expect(window.location.pathname).toBe('/plans')
 
 		act(() => {
 			button('Review')?.click()

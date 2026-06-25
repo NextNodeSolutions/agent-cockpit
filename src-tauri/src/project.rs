@@ -41,9 +41,10 @@ pub async fn set_active_project(
     watchers: tauri::State<'_, watcher::RepoWatchers>,
 ) -> Result<(), String> {
     // canonicalize() hits the filesystem; run it off the async worker.
-    let canonical = tauri::async_runtime::spawn_blocking(move || validate_repo_path(&repo_path))
-        .await
-        .map_err(|err| format!("validate_repo_path task failed: {err}"))??;
+    let canonical =
+        tauri::async_runtime::spawn_blocking(move || validate_repo_for_registration(&repo_path))
+            .await
+            .map_err(|err| format!("validate_repo_path task failed: {err}"))??;
     // Auto-register (MP4): becoming active is the only gesture that grows the
     // registry. A persist failure must not block the switch itself.
     match registry.add(canonical.clone()) {
@@ -113,6 +114,19 @@ pub(crate) fn validate_repo_path(repo_path: &str) -> Result<PathBuf, String> {
     if !canonical.is_dir() {
         return Err(format!("{} is not a directory", canonical.display()));
     }
+    Ok(canonical)
+}
+
+/// Validate a path for REGISTRATION: a real on-disk directory that is *also* a
+/// git repository. Becoming a project means hosting agent sessions, which
+/// anchor a session ref to a commit; rejecting a non-git folder here turns a
+/// later silent `session_create` rollback into an upfront, actionable error.
+/// Read-only commands keep using [`validate_repo_path`], which stays open to any
+/// on-disk repo (MP1).
+pub(crate) fn validate_repo_for_registration(repo_path: &str) -> Result<PathBuf, String> {
+    let canonical = validate_repo_path(repo_path)?;
+    repo_open(&canonical)
+        .map_err(|err| format!("{} is not a git repository: {err}", canonical.display()))?;
     Ok(canonical)
 }
 

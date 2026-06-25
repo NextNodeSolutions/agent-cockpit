@@ -1,3 +1,4 @@
+pub mod activity_sink;
 pub mod cell_frame;
 pub mod commands;
 pub mod error;
@@ -10,10 +11,10 @@ pub mod mouse;
 pub mod path;
 pub mod pty;
 pub mod sink;
-mod store;
 pub mod tauri_sink;
 pub mod term_sink;
 
+pub use activity_sink::{ActivitySink, AGENT_ACTIVITY_EVENT};
 pub use cell_frame::CellFrame;
 pub use error::SessionError;
 pub use handle::SessionHandle;

@@ -31,7 +31,7 @@ export const agentRunIndexHref = (): string => `/${AGENT_RUN_PATH_ROOT}`
 
 export const tasksHref = (): string => `/${TASKS_PATH_ROOT}`
 
-export const MISSION_FILTERS = ['running', 'review', 'failed'] as const
+export const MISSION_FILTERS = ['running', 'idle'] as const
 
 /** The status filters mission control can be deep-linked to. */
 export type MissionControlFilter = (typeof MISSION_FILTERS)[number]

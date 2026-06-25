@@ -5,8 +5,9 @@ const isAgentBinary = (binary: string): boolean =>
 
 /**
  * The session a review remark should land in: the most recently started
- * running session of the repo, preferring an agent (`claude*`) over a plain
- * shell. Null when nothing in the repo can receive input.
+ * session of the repo, preferring an agent (`claude*`) over a plain shell.
+ * Every session in the store is live, so any of the repo's sessions can
+ * receive input; null when the repo has none.
  */
 export const pickAgentSession = (
 	sessions: ReadonlyArray<SessionState>,
@@ -14,10 +15,7 @@ export const pickAgentSession = (
 ): SessionState | null => {
 	if (repoPath === null) return null
 	const candidates = sessions
-		.filter(
-			session =>
-				session.status === 'running' && session.repoPath === repoPath,
-		)
+		.filter(session => session.repoPath === repoPath)
 		.toSorted((a, b) => b.startedAt - a.startedAt)
 	return (
 		candidates.find(session => isAgentBinary(session.binary)) ??

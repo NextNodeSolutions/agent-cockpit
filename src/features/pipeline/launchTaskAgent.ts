@@ -42,10 +42,9 @@ export const launchTaskAgent = async (task: Task): Promise<string | null> => {
 		binary: AGENT_BINARY,
 		repoPath: task.repoPath,
 	})
-	if (sessionId === null) {
-		pushToast('Agent launch failed — see logs')
-		return null
-	}
+	// spawnSession already toasts the specific reason (binary missing, non-git
+	// cwd, …) on failure, so just bail here without a second, vaguer toast.
+	if (sessionId === null) return null
 
 	try {
 		await updateTask({

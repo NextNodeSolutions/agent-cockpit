@@ -1,6 +1,8 @@
 use thiserror::Error;
 
 mod cells;
+mod color;
+mod color_query;
 mod device;
 mod key;
 mod mouse;
@@ -11,6 +13,8 @@ mod terminal;
 pub use device::PtyWriter;
 
 pub use cells::{Attrs, Cell, CellWidth, Cells, Color};
+pub use color::{ColorScheme, DefaultColors, Rgb};
+pub use color_query::ColorQueryResponder;
 pub use key::{KeyEncoder, Mods};
 pub use mouse::{MouseAction, MouseButton, MouseEncoder, MouseInput};
 pub use paste::encode_paste;

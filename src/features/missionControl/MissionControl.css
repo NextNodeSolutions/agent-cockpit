@@ -6,7 +6,7 @@
 	padding: 0 var(--sp-panel) var(--sp-panel);
 }
 
-/* mc-wrap already pads horizontally — keep the head 18px from the edge */
+/* mc-wrap already pads horizontally — the head sits flush to that frame */
 .mc-wrap .view-head {
 	padding-left: 0;
 	padding-right: 0;
@@ -17,7 +17,7 @@
 	align-items: center;
 	gap: 8px;
 	flex-wrap: wrap;
-	padding: 14px 2px;
+	padding: 10px 2px;
 	flex: none;
 }
 
@@ -35,7 +35,7 @@
 	display: flex;
 	flex-direction: column;
 	gap: var(--sp-gap);
-	padding: 4px 2px 24px;
+	padding: 4px 2px var(--sp-panel);
 }
 
 .mc-empty {
@@ -109,7 +109,7 @@
 	display: flex;
 	align-items: center;
 	gap: 6px;
-	padding: 11px 14px;
+	padding: 11px var(--sp-card);
 }
 
 /* The disclosure is a real <button>; reset it to the old header row look. */
@@ -216,8 +216,8 @@
 .proj-grid {
 	display: grid;
 	grid-template-columns: repeat(3, 1fr);
-	gap: calc(var(--sp-gap) - 2px);
-	padding: 2px 12px 12px;
+	gap: var(--sp-gap);
+	padding: 2px var(--sp-card) var(--sp-card);
 }
 
 /* cards stagger in like the groups do (delay set inline per card) */
@@ -377,23 +377,9 @@
 	margin-left: auto;
 }
 
-.ac-foot .gobtn {
-	margin-left: auto;
-	opacity: 0;
-	transform: translateX(-4px);
-	transition:
-		opacity var(--t-fast),
-		transform var(--t-fast) var(--ease-out);
-}
-
-.agent-card:hover .gobtn {
-	opacity: 1;
-	transform: none;
-}
-
 /* ---- dormant repos: the wall's compact tail (MP4) ---- */
 .mc-dormant {
-	margin-top: 18px;
+	margin-top: var(--sp-gap);
 	border: 1px dashed var(--border);
 	border-radius: var(--r-md);
 	background: color-mix(in srgb, var(--surface) 55%, transparent);

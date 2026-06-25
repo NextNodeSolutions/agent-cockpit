@@ -1,6 +1,8 @@
 import { getDefaultStore } from 'jotai'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { toastsAtom } from '@/shared/toasts'
+
 const listenMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@tauri-apps/api/event', () => ({
@@ -11,12 +13,15 @@ import {
 	resetAgentEventsBridgeForTests,
 	startAgentEventsBridge,
 } from './agentEventsBridge'
+import { markIntentionalClose } from './sessionExit'
 import {
+	AGENT_ACTIVITY_EVENT,
 	AGENT_CELLS_EVENT,
 	AGENT_END_EVENT,
 	AGENT_TITLE_EVENT,
 	cellFramesAtom,
-	endSessionAtom,
+	removeSessionAtom,
+	sessionActivityAtom,
 	sessionsAtom,
 	startSessionAtom,
 } from './sessions'
@@ -30,7 +35,7 @@ describe('sessions atoms', () => {
 		store.set(sessionsAtom, {})
 	})
 
-	it('startSessionAtom registers a fresh running session', () => {
+	it('startSessionAtom registers a fresh session', () => {
 		vi.useFakeTimers()
 		vi.setSystemTime(1_750_000_000_000)
 
@@ -45,24 +50,36 @@ describe('sessions atoms', () => {
 			binary: 'claude',
 			repoPath: '/repo',
 			title: null,
-			status: 'running',
-			exitCode: null,
 			startedAt: 1_750_000_000_000,
 		})
 		vi.useRealTimers()
 	})
 
-	it('endSessionAtom flips status to ended and stores the exit code', () => {
+	it('removeSessionAtom drops the session and its activity + last frame', () => {
 		store.set(startSessionAtom, {
 			id: 'sess-a',
 			binary: 'claude',
 			repoPath: '/repo',
 		})
-		store.set(endSessionAtom, { sessionId: 'sess-a', exitCode: 0 })
+		store.set(sessionActivityAtom, { 'sess-a': 1 })
+		store.set(cellFramesAtom, {
+			'sess-a': {
+				session_id: 'sess-a',
+				cols: 1,
+				rows: 1,
+				cells: [],
+				cursor: null,
+				mouse_reporting: false,
+				viewport_top: 0,
+				history_total: 0,
+			},
+		})
 
-		const session = store.get(sessionsAtom)['sess-a']
-		expect(session?.status).toBe('ended')
-		expect(session?.exitCode).toBe(0)
+		store.set(removeSessionAtom, 'sess-a')
+
+		expect(store.get(sessionsAtom)['sess-a']).toBeUndefined()
+		expect(store.get(sessionActivityAtom)['sess-a']).toBeUndefined()
+		expect(store.get(cellFramesAtom)['sess-a']).toBeUndefined()
 	})
 
 	it('subscribers are notified on every atom write', () => {
@@ -76,7 +93,7 @@ describe('sessions atoms', () => {
 			binary: 'claude',
 			repoPath: '/repo',
 		})
-		store.set(endSessionAtom, { sessionId: 'sess-a', exitCode: 0 })
+		store.set(removeSessionAtom, 'sess-a')
 
 		unsubscribe()
 		expect(seen).toHaveLength(2)
@@ -91,17 +108,18 @@ describe('startAgentEventsBridge', () => {
 		resetAgentEventsBridgeForTests()
 		store.set(sessionsAtom, {})
 		store.set(cellFramesAtom, {})
+		store.set(toastsAtom, [])
 		listenMock.mockReset()
 		unlistenMock.mockReset()
 		listenMock.mockResolvedValue(unlistenMock)
 	})
 
-	it('subscribes to agent:end, agent:cells and agent:title exactly once each', () => {
+	it('subscribes to agent:end, agent:cells, agent:title and agent:activity exactly once each', () => {
 		startAgentEventsBridge()
 		startAgentEventsBridge()
 		startAgentEventsBridge()
 
-		expect(listenMock).toHaveBeenCalledTimes(3)
+		expect(listenMock).toHaveBeenCalledTimes(4)
 		expect(listenMock).toHaveBeenNthCalledWith(
 			1,
 			AGENT_END_EVENT,
@@ -115,6 +133,11 @@ describe('startAgentEventsBridge', () => {
 		expect(listenMock).toHaveBeenNthCalledWith(
 			3,
 			AGENT_TITLE_EVENT,
+			expect.any(Function),
+		)
+		expect(listenMock).toHaveBeenNthCalledWith(
+			4,
+			AGENT_ACTIVITY_EVENT,
 			expect.any(Function),
 		)
 	})
@@ -131,7 +154,7 @@ describe('startAgentEventsBridge', () => {
 		return handler
 	}
 
-	it('routes agent:end into endSessionAtom for a known session', () => {
+	it('routes agent:end into removeSessionAtom — the session is dropped', () => {
 		startAgentEventsBridge()
 		const handler = getCapturedEndHandler()
 
@@ -142,9 +165,41 @@ describe('startAgentEventsBridge', () => {
 		})
 		handler({ payload: { session_id: 'sess-a', exit_code: 0 } })
 
-		const session = store.get(sessionsAtom)['sess-a']
-		expect(session?.status).toBe('ended')
-		expect(session?.exitCode).toBe(0)
+		expect(store.get(sessionsAtom)['sess-a']).toBeUndefined()
+	})
+
+	it('toasts an unexpected non-zero exit before dropping the session', () => {
+		startAgentEventsBridge()
+		const handler = getCapturedEndHandler()
+
+		store.set(startSessionAtom, {
+			id: 'sess-a',
+			binary: 'claude',
+			repoPath: '/repo',
+		})
+		handler({ payload: { session_id: 'sess-a', exit_code: 137 } })
+
+		const messages = store.get(toastsAtom).map(toast => toast.message)
+		expect(messages).toContain('claude exited with code 137')
+		expect(store.get(sessionsAtom)['sess-a']).toBeUndefined()
+	})
+
+	it('stays silent when the user closed the session on purpose', () => {
+		startAgentEventsBridge()
+		const handler = getCapturedEndHandler()
+
+		store.set(startSessionAtom, {
+			id: 'sess-a',
+			binary: 'claude',
+			repoPath: '/repo',
+		})
+		// closeSession marks the id before the kill; the signal-based exit code
+		// that follows must NOT read as a crash.
+		markIntentionalClose('sess-a')
+		handler({ payload: { session_id: 'sess-a', exit_code: 137 } })
+
+		expect(store.get(toastsAtom)).toEqual([])
+		expect(store.get(sessionsAtom)['sess-a']).toBeUndefined()
 	})
 
 	const getCapturedCellsHandler = (): ((event: {

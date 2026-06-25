@@ -17,7 +17,7 @@ vi.mock('./launchSession', () => ({
 }))
 
 import { CockpitSessions } from './CockpitSessions'
-import { endSessionAtom, sessionsAtom, startSessionAtom } from './sessions'
+import { sessionsAtom, startSessionAtom } from './sessions'
 
 const store = getDefaultStore()
 
@@ -48,22 +48,12 @@ describe('CockpitSessions', () => {
 		vi.useRealTimers()
 	})
 
-	const seed = (
-		id: string,
-		ended?: { exitCode: number },
-		repoPath = '/repo/mizraj',
-	): void => {
+	const seed = (id: string, repoPath = '/repo/mizraj'): void => {
 		store.set(startSessionAtom, {
 			id,
 			binary: 'claude',
 			repoPath,
 		})
-		if (ended) {
-			store.set(endSessionAtom, {
-				sessionId: id,
-				exitCode: ended.exitCode,
-			})
-		}
 	}
 
 	const render = (
@@ -85,22 +75,19 @@ describe('CockpitSessions', () => {
 			'button[aria-label="New session"]',
 		)
 
-	it('groups sessions under running and ended headings with counts', () => {
+	it('lists every session as a flat row, no group headings', () => {
 		seed('run-1')
 		seed('run-2')
-		seed('done-1', { exitCode: 0 })
 		render('run-1')
 
-		const headings = Array.from(container.querySelectorAll('.lgroup')).map(
-			heading => heading.textContent,
-		)
-		expect(headings).toEqual(['Running · 2', 'Ended · 1'])
+		expect(container.querySelectorAll('.lgroup')).toHaveLength(0)
+		expect(container.querySelectorAll('.lrow')).toHaveLength(2)
 	})
 
 	it('shows the panel head with the total session count', () => {
 		seed('run-1')
 		seed('run-2')
-		seed('done-1', { exitCode: 0 })
+		seed('run-3')
 		render('run-1')
 
 		expect(container.querySelector('.panel-head h3')?.textContent).toBe(
@@ -141,7 +128,7 @@ describe('CockpitSessions', () => {
 		vi.useFakeTimers()
 		vi.setSystemTime(FROZEN_NOW)
 		seed('mizraj-1')
-		seed('scribe-1', undefined, '/repo/scribe')
+		seed('scribe-1', '/repo/scribe')
 		render('mizraj-1', '/repo/mizraj')
 
 		expect(container.querySelectorAll('.lrow')).toHaveLength(1)
@@ -157,35 +144,22 @@ describe('CockpitSessions', () => {
 
 	it('shows sessions from every repo when no repo is followed', () => {
 		seed('mizraj-1')
-		seed('scribe-1', undefined, '/repo/scribe')
+		seed('scribe-1', '/repo/scribe')
 		render('mizraj-1', null)
 
 		expect(container.querySelectorAll('.lrow')).toHaveLength(2)
 	})
 
-	it('shows nothing for a group without sessions', () => {
-		seed('run-1')
-		render('run-1')
-
-		expect(container.textContent).not.toContain('Ended')
-	})
-
-	it('metas running rows with repo · age and ended rows with repo · status', () => {
+	it('metas an unscoped row with repo · age', () => {
 		vi.useFakeTimers()
 		vi.setSystemTime(FROZEN_NOW)
 		seed('run-1')
-		seed('rev-1', { exitCode: 0 })
-		seed('fail-1', { exitCode: 1 })
-		render('run-1')
+		render('run-1', null)
 
 		const metas = Array.from(container.querySelectorAll('.lrow .lr-b')).map(
 			meta => meta.textContent,
 		)
-		expect(metas).toEqual([
-			'mizraj · 0s',
-			'mizraj · needs review',
-			'mizraj · failed',
-		])
+		expect(metas).toEqual(['mizraj · 0s'])
 	})
 
 	it('hints the global palette shortcut in the panel foot', () => {
@@ -222,19 +196,14 @@ describe('CockpitSessions', () => {
 		expect(newSessionButton()?.disabled).toBe(true)
 	})
 
-	it('dots rows with the session display status', () => {
+	it('dots rows with the running status', () => {
 		seed('run-1')
-		seed('rev-1', { exitCode: 0 })
-		seed('fail-1', { exitCode: 1 })
+		seed('run-2')
 		render('run-1')
 
 		const dots = Array.from(container.querySelectorAll('.lrow .sdot')).map(
 			dot => dot.className,
 		)
-		expect(dots).toEqual([
-			'sdot sdot-run',
-			'sdot sdot-rev',
-			'sdot sdot-fail',
-		])
+		expect(dots).toEqual(['sdot sdot-run', 'sdot sdot-run'])
 	})
 })

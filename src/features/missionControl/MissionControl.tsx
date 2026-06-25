@@ -10,43 +10,36 @@ import {
 import { useProjects } from '@/features/projects/useProjects'
 import { sessionDisplayStatus } from '@/features/sessions/displayStatus'
 import { RunAgentButton } from '@/features/sessions/RunAgentButton'
-import type { SessionState } from '@/features/sessions/sessions'
+import { useSessionActivity } from '@/features/sessions/useSessionActivity'
 import { useSessions } from '@/features/sessions/useSessions'
 import { SDot } from '@/shared/ui/atoms'
 
 import { DormantSection } from './DormantSection'
 import { ProjectGroup } from './ProjectGroup'
 import {
+	countByStatus,
 	dormantRepos,
 	groupSessionsByRepo,
 	visibleProjectGroups,
 } from './projectGroups'
+import type { StatusOf } from './projectGroups'
 import { restartStagger } from './restartStagger'
 
-// TODO(backend): merge tracking — no merged state; the 4th chip filters
-// 'failed' instead of design's 'Done'
 const FILTER_LABEL: Readonly<Record<MissionFilter, string>> = {
 	all: 'All',
 	running: 'Running',
-	review: 'Needs review',
-	failed: 'Failed',
+	idle: 'Idle',
 }
 
-const CHIP_ORDER: ReadonlyArray<MissionFilter> = [
-	'all',
-	'running',
-	'review',
-	'failed',
-]
+const CHIP_ORDER: ReadonlyArray<MissionFilter> = ['all', 'running', 'idle']
+
+const CHIP_DOT: Readonly<Record<MissionControlFilter, 'run' | 'idle'>> = {
+	running: 'run',
+	idle: 'idle',
+}
 
 const chipHref = (key: MissionFilter): string =>
 	key === 'all' ? missionControlHref() : missionControlHref(key)
-
-const countByStatus = (
-	sessions: ReadonlyArray<SessionState>,
-	status: MissionControlFilter,
-): number =>
-	sessions.filter(session => sessionDisplayStatus(session) === status).length
 
 // Shared by the populated screen and its zero-session state.
 const MissionControlHead = (): React.JSX.Element => (
@@ -65,8 +58,9 @@ export const MissionControl = ({
 }: Props): React.JSX.Element => {
 	const sessions = useSessions()
 	const { projects } = useProjects()
+	const activityFor = useSessionActivity()
 	// The URL is the single source of truth — the topbar status cluster
-	// deep-links here with ?filter=running|review.
+	// deep-links here with ?filter=running|idle.
 	const filter = parseMissionFilter(useLocationSearch())
 	const staggerRef = useRef<HTMLDivElement>(null)
 
@@ -76,7 +70,11 @@ export const MissionControl = ({
 		restartStagger(staggerRef.current)
 	}, [filter])
 
-	const sessionGroups = groupSessionsByRepo(sessions)
+	// One clock for the whole wall: running↔idle for every card off a single
+	// activity reading (see useSessionActivity).
+	const statusOf: StatusOf = session =>
+		sessionDisplayStatus(activityFor(session.id))
+	const sessionGroups = groupSessionsByRepo(sessions, statusOf)
 	const dormant = dormantRepos(sessionGroups, projects, activeProjectPath)
 
 	if (sessions.length === 0) {
@@ -95,7 +93,7 @@ export const MissionControl = ({
 	}
 
 	const countFor = (key: MissionFilter): number =>
-		key === 'all' ? sessions.length : countByStatus(sessions, key)
+		key === 'all' ? sessions.length : countByStatus(sessions, key, statusOf)
 
 	// The followed repo always keeps a top group (even empty); a group whose
 	// every card is filtered out otherwise disappears.
@@ -103,6 +101,7 @@ export const MissionControl = ({
 		sessionGroups,
 		activeProjectPath,
 		filter,
+		statusOf,
 	)
 
 	return (
@@ -117,7 +116,7 @@ export const MissionControl = ({
 						data-on={filter === key ? 'true' : 'false'}
 						onClick={() => navigate(chipHref(key))}
 					>
-						{key === 'running' && <SDot s="run" />}
+						{key !== 'all' && <SDot s={CHIP_DOT[key]} />}
 						<span>{FILTER_LABEL[key]}</span>
 						<b>{countFor(key)}</b>
 					</button>
@@ -125,7 +124,7 @@ export const MissionControl = ({
 				<span className="mz-spacer" />
 				<span className="mc-scope">
 					{groups.length + dormant.length} projects ·{' '}
-					{countFor('running')} agents live
+					{sessions.length} agents live
 				</span>
 			</div>
 			{visibleCardCount === 0 ? (

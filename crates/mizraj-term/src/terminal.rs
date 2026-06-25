@@ -12,7 +12,10 @@ use mizraj_term_sys::{
     GhosttyTerminalScrollViewportValue, GhosttyTerminalScrollbar,
 };
 
-use crate::device::{drop_callbacks, install_pty_writer, PtyWriter, TerminalCallbacks};
+use crate::color::DefaultColors;
+use crate::device::{
+    drop_callbacks, install_pty_writer, set_default_colors, PtyWriter, TerminalCallbacks,
+};
 use crate::{Result, TermError};
 
 /// DEC private mode 2004 (bracketed paste), packed per `modes.h`: bits 0–14
@@ -168,6 +171,15 @@ impl Terminal {
         // OPT_USERDATA now points at the new box.
         drop_callbacks(previous);
         Ok(())
+    }
+
+    /// Seed the default theme colors libghostty answers color and color-scheme
+    /// queries (OSC 10/11/12, DSR `?996n`) with, so a probing TUI sees the
+    /// user's real Ghostty theme. Must run after [`set_pty_writer`](Self::set_pty_writer):
+    /// the color-scheme reply rides the write-back callback, and the scheme is
+    /// stored in the callback state that installs.
+    pub fn set_default_colors(&mut self, colors: &DefaultColors) -> Result<()> {
+        set_default_colors(self.handle, self.callbacks, colors)
     }
 
     /// The title the running program set via OSC 0/2, when any.

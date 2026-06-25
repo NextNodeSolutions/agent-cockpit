@@ -26,8 +26,6 @@ const session = (
 	binary: 'claude',
 	repoPath: '/repo',
 	title: null,
-	status: 'running',
-	exitCode: null,
 	startedAt: 0,
 	...overrides,
 })
@@ -52,12 +50,9 @@ const build = (
 	})
 
 describe('buildPaletteItems', () => {
-	it('orders the groups agents, review, plans, go to, actions', () => {
+	it('orders the groups agents, plans, go to, actions', () => {
 		const items = build({
-			sessions: [
-				session('run-1'),
-				session('done-1', { status: 'ended', exitCode: 0 }),
-			],
+			sessions: [session('run-1'), session('run-2')],
 			plans: [PLAN],
 			activeProjectPath: '/repo',
 		})
@@ -65,13 +60,7 @@ describe('buildPaletteItems', () => {
 		const groupSequence = items
 			.map(item => item.group)
 			.filter((group, index, groups) => groups[index - 1] !== group)
-		expect(groupSequence).toEqual([
-			'Agents',
-			'Review',
-			'Plans',
-			'Go to',
-			'Actions',
-		])
+		expect(groupSequence).toEqual(['Agents', 'Plans', 'Go to', 'Actions'])
 	})
 
 	it('always offers the screens with their chord hints', () => {
@@ -102,18 +91,13 @@ describe('buildPaletteItems', () => {
 		expect(window.location.pathname).toBe('/agent-run/sess-7')
 	})
 
-	it('lists each session with its status as a jump target', () => {
+	it('lists each session as a jump target', () => {
 		const items = build({
-			sessions: [
-				session('run-1'),
-				session('done-1', { status: 'ended', exitCode: 0 }),
-			],
+			sessions: [session('run-1'), session('run-2')],
 		})
 
 		const agents = items.filter(item => item.group === 'Agents')
 		expect(agents).toHaveLength(2)
-		expect(agents[0]?.hint).toBe('running')
-		expect(agents[1]?.hint).toBe('needs review')
 	})
 
 	it('gives every item a unique id even when two sessions share a label', () => {
@@ -145,23 +129,6 @@ describe('buildPaletteItems', () => {
 		expect(items.find(item => item.group === 'Agents')?.label).toBe(
 			'claude — mizraj',
 		)
-	})
-
-	it('surfaces ended-clean sessions as review entries', () => {
-		window.history.pushState({}, '', '/')
-		const items = build({
-			sessions: [
-				session('run-1'),
-				session('done-1', { status: 'ended', exitCode: 0 }),
-			],
-		})
-
-		const review = items.filter(item => item.group === 'Review')
-		expect(review).toHaveLength(1)
-		expect(review[0]?.label).toBe('claude — needs review')
-
-		review[0]?.run()
-		expect(window.location.pathname).toBe('/review')
 	})
 
 	it('lists plans and interviews', () => {

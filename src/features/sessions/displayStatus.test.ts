@@ -1,40 +1,38 @@
 import { describe, expect, it } from 'vitest'
 
-import { sessionDisplayStatus, DISPLAY_STATUS_LABEL } from './displayStatus'
-import type { SessionState } from './sessions'
-
-const session = (overrides: Partial<SessionState>): SessionState => ({
-	id: 'sess-a',
-	binary: 'claude',
-	repoPath: '/repo',
-	title: null,
-	status: 'running',
-	exitCode: null,
-	startedAt: 0,
-	...overrides,
-})
+import {
+	sessionDisplayStatus,
+	DISPLAY_STATUS_LABEL,
+	IDLE_AFTER_MS,
+} from './displayStatus'
 
 describe('sessionDisplayStatus', () => {
-	it('maps a running session to running', () => {
-		expect(sessionDisplayStatus(session({}))).toBe('running')
+	it('is running without any activity reading', () => {
+		expect(sessionDisplayStatus()).toBe('running')
 	})
 
-	it('maps a clean exit to review — the agent finished, the diff awaits', () => {
+	it('keeps running while output is recent', () => {
+		const now = 10_000
 		expect(
-			sessionDisplayStatus(session({ status: 'ended', exitCode: 0 })),
-		).toBe('review')
+			sessionDisplayStatus({
+				lastActiveAt: now - (IDLE_AFTER_MS - 1),
+				now,
+			}),
+		).toBe('running')
 	})
 
-	it('maps a non-zero exit to failed', () => {
+	it('flips to idle once output has been quiet', () => {
+		const now = 10_000
 		expect(
-			sessionDisplayStatus(session({ status: 'ended', exitCode: 1 })),
-		).toBe('failed')
+			sessionDisplayStatus({ lastActiveAt: now - IDLE_AFTER_MS, now }),
+		).toBe('idle')
 	})
 
-	it('maps an ended session without exit code to failed', () => {
-		expect(
-			sessionDisplayStatus(session({ status: 'ended', exitCode: null })),
-		).toBe('failed')
+	it('stays running when no activity has been observed yet', () => {
+		// A just-launched agent with no ping yet is optimistically working.
+		expect(sessionDisplayStatus({ lastActiveAt: undefined, now: 0 })).toBe(
+			'running',
+		)
 	})
 })
 
@@ -42,8 +40,8 @@ describe('DISPLAY_STATUS_LABEL', () => {
 	it('labels every display status', () => {
 		expect(DISPLAY_STATUS_LABEL).toEqual({
 			running: 'running',
-			review: 'needs review',
-			failed: 'failed',
+			idle: 'idle',
+			needInput: 'needs input',
 		})
 	})
 })

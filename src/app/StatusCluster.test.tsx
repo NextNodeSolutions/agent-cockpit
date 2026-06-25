@@ -5,7 +5,7 @@ import type { Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import {
-	endSessionAtom,
+	sessionActivityAtom,
 	sessionsAtom,
 	startSessionAtom,
 } from '@/features/sessions/sessions'
@@ -24,6 +24,7 @@ describe('StatusCluster', () => {
 
 	beforeEach(() => {
 		store.set(sessionsAtom, {})
+		store.set(sessionActivityAtom, {})
 		window.history.pushState({}, '', '/plans')
 		container = document.createElement('div')
 		document.body.appendChild(container)
@@ -43,20 +44,22 @@ describe('StatusCluster', () => {
 		})
 	}
 
-	it('counts running and to-review sessions separately', () => {
+	it('counts running and idle sessions separately', () => {
 		startSession('run-1')
 		startSession('run-2')
-		startSession('done-1')
-		store.set(endSessionAtom, { sessionId: 'done-1', exitCode: 0 })
+		startSession('idle-1')
+		// A stale activity timestamp reads as idle against the live clock; the
+		// two sessions with no activity stay optimistically running.
+		store.set(sessionActivityAtom, { 'idle-1': 1 })
 		render()
 
-		const [running, review] = Array.from(
+		const [running, idle] = Array.from(
 			container.querySelectorAll('.mz-status .mz-statbtn'),
 		)
 		expect(running?.textContent).toContain('2')
 		expect(running?.textContent).toContain('running')
-		expect(review?.textContent).toContain('1')
-		expect(review?.textContent).toContain('to review')
+		expect(idle?.textContent).toContain('1')
+		expect(idle?.textContent).toContain('idle')
 	})
 
 	it('jumps to mission control filtered on running agents', () => {
@@ -72,18 +75,16 @@ describe('StatusCluster', () => {
 		expect(window.location.search).toBe('?filter=running')
 	})
 
-	it('jumps to mission control filtered on agents waiting for review', () => {
+	it('jumps to mission control filtered on idle agents', () => {
 		render()
 
 		act(() => {
 			container
-				.querySelector<HTMLElement>(
-					'[title="Jump to agents waiting on you"]',
-				)
+				.querySelector<HTMLElement>('[title="Jump to idle agents"]')
 				?.click()
 		})
 
 		expect(window.location.pathname).toBe('/')
-		expect(window.location.search).toBe('?filter=review')
+		expect(window.location.search).toBe('?filter=idle')
 	})
 })

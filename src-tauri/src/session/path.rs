@@ -137,7 +137,8 @@ mod tests {
     #[test]
     fn extract_framed_path_drops_rc_banner_noise() {
         // A login rc that prints a multi-line banner before the framed PATH.
-        let stdout = b"Welcome to oh-my-zsh\nNow using node v20\n\0/opt/homebrew/bin:/usr/bin:/bin\0";
+        let stdout =
+            b"Welcome to oh-my-zsh\nNow using node v20\n\0/opt/homebrew/bin:/usr/bin:/bin\0";
         assert_eq!(
             extract_framed_path(stdout),
             "/opt/homebrew/bin:/usr/bin:/bin"

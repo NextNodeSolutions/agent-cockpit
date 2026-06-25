@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.4.0](https://github.com/NextNodeSolutions/mizraj/compare/v0.3.4...v0.4.0) (2026-06-25)
+
+
+### Features
+
+* **ghostty:** vendor theme corpus for self-contained theme resolution ([33da472](https://github.com/NextNodeSolutions/mizraj/commit/33da472d8caf7a89d4dad465f9928faf2a661435))
+* **rail:** park Board and Plans views off the shell rail ([2e97163](https://github.com/NextNodeSolutions/mizraj/commit/2e97163d0881cdc15aba0df6dce269754c8f398b))
+* **sessions:** show running vs idle from PTY output activity ([a6a90d9](https://github.com/NextNodeSolutions/mizraj/commit/a6a90d9db81375ed67831b5381695e4a1f6bb1f3))
+* **sessions:** toast an unexpected exit so a crash isn't silent ([36003d5](https://github.com/NextNodeSolutions/mizraj/commit/36003d5aa45f4bec05a383e1ba48605e59b5bef2))
+
+
+### Bug Fixes
+
+* **db:** never root progress.db at a relative path ([de16851](https://github.com/NextNodeSolutions/mizraj/commit/de168510092882efaf9a9a53b58c1b0ae3da91ea))
+* **env:** resolve HOME via home_dir() for Finder/launchd launches ([8790673](https://github.com/NextNodeSolutions/mizraj/commit/87906730536a1f7071ff1c3ac8fcbc0f481b24b5))
+* **ghostty:** seed session theme colors for the live appearance ([4f6216d](https://github.com/NextNodeSolutions/mizraj/commit/4f6216def65510d3b479e10b2af7d6807d74b695))
+* harden the standalone macOS app — theming, launch, sessions ([93bf5cd](https://github.com/NextNodeSolutions/mizraj/commit/93bf5cde20cb81a3f3ec8989e365d85499740130))
+* **project:** reject non-git folders at registration, allow unborn HEAD ([7011c13](https://github.com/NextNodeSolutions/mizraj/commit/7011c139bb688c9060726f2e33aa356d0ed388d2))
+* **project:** survive a corrupt projects.json instead of exit(1) ([5e674b2](https://github.com/NextNodeSolutions/mizraj/commit/5e674b26338cf5acf50176ac54f6aa04a6fe9a84))
+* **pty:** don't override an inherited TERM/LANG/COLORTERM ([ba4826a](https://github.com/NextNodeSolutions/mizraj/commit/ba4826a85ff369a863a73a098bf90399aad8db51))
+* **pty:** extract login-shell PATH by NUL framing, not last line ([58df065](https://github.com/NextNodeSolutions/mizraj/commit/58df06541ecb14af8d586a0774931b25f914a848))
+* **pty:** seed TERM/COLORTERM/LANG defaults for spawned shells ([0e5a737](https://github.com/NextNodeSolutions/mizraj/commit/0e5a7373062aaea79677716dd09d86772c9fd95a))
+* **sessions:** toast the reason when a session fails to launch ([e3a2ba6](https://github.com/NextNodeSolutions/mizraj/commit/e3a2ba6ee0e3e1f2db016250bc3497c553d8d6b2))
+* **startup:** bound the login-shell PATH probe with a timeout ([e1d4b29](https://github.com/NextNodeSolutions/mizraj/commit/e1d4b2946e63f62dcaa80d24d83b71cc11dde850))
+* **startup:** set PATH before spawning env-reading threads ([4d9f830](https://github.com/NextNodeSolutions/mizraj/commit/4d9f8303dd5a5a70c65c9f0ba0a243f142f3fe10))
+* **terminal:** advertise resolved theme colors so TUIs detect light/dark ([ba78646](https://github.com/NextNodeSolutions/mizraj/commit/ba7864619c95cf06e93127914c47c78fad636bc1))
+* **ui:** status dot — alignment, smooth pulse, fuller state model ([cafa977](https://github.com/NextNodeSolutions/mizraj/commit/cafa97749b7d0c16194b2f949426015ffdbacb0e))
+
 ## [0.3.4](https://github.com/NextNodeSolutions/mizraj/compare/v0.3.3...v0.3.4) (2026-06-14)
 
 

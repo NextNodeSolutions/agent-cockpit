@@ -2,6 +2,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { getDefaultStore } from 'jotai'
 
 import { agentRunHref, navigate } from '@/app/router'
+import { currentAppearance } from '@/features/settings/useAppearance'
 import { describeError, isSessionError } from '@/shared/errors'
 import { logger } from '@/shared/logger'
 import { pushToast } from '@/shared/toasts'
@@ -40,6 +41,9 @@ export const spawnSession = async ({
 		const sessionId = await invoke<string>('session_create', {
 			binary,
 			cwd: repoPath,
+			// Resolved light/dark so the backend seeds the terminal's theme colors
+			// for what the user sees, not a hardcoded dark default.
+			appearance: currentAppearance(),
 		})
 		getDefaultStore().set(startSessionAtom, {
 			id: sessionId,

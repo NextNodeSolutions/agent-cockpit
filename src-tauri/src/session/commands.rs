@@ -54,6 +54,7 @@ async fn session_create_inner<F>(
     pool: &SqlitePool,
     binary: &str,
     cwd: String,
+    colorfgbg: &str,
     sink_factory: F,
 ) -> Result<SessionId, SessionError>
 where
@@ -63,10 +64,8 @@ where
     let cwd_path = PathBuf::from(cwd);
     // Advertise the resolved terminal's light/dark polarity so a child that
     // reads COLORFGBG (rather than querying OSC 11) still picks the right theme.
-    let env: HashMap<String, String> = HashMap::from([(
-        "COLORFGBG".to_string(),
-        crate::ghostty::session_colorfgbg().to_string(),
-    )]);
+    let env: HashMap<String, String> =
+        HashMap::from([("COLORFGBG".to_string(), colorfgbg.to_string())]);
 
     let id = manager
         .create_session(binary_path, cwd_path.clone(), env, sink_factory)
@@ -118,6 +117,10 @@ fn resolve_pool_key(cwd: &str) -> Result<PathBuf, SessionError> {
 pub async fn session_create<R: Runtime>(
     binary: String,
     cwd: String,
+    // The frontend's resolved light/dark; absent (older callers) falls back to
+    // dark inside `session_terminal_colors`. Drives the seeded theme colors and
+    // COLORFGBG so a probing TUI detects the terminal the user actually sees.
+    appearance: Option<String>,
     app: AppHandle<R>,
     manager: tauri::State<'_, SessionManager>,
     db: tauri::State<'_, Db>,
@@ -137,8 +140,9 @@ pub async fn session_create<R: Runtime>(
         .await
         .map_err(SessionError::Database)?;
     let scrollback_lines = crate::ghostty::scrollback_lines();
-    let colors = crate::ghostty::session_terminal_colors();
-    session_create_inner(&manager, &pool, &binary, cwd, move |id, pty_input| {
+    let colors = crate::ghostty::session_terminal_colors(appearance.as_deref().unwrap_or("dark"));
+    let colorfgbg = crate::ghostty::colorfgbg_for(colors.scheme);
+    session_create_inner(&manager, &pool, &binary, cwd, colorfgbg, move |id, pty_input| {
         vec![
             Arc::new(TauriEventSink::new(app.clone(), id.clone())) as Arc<dyn OutputSink>,
             Arc::new(ActivitySink::new(app.clone(), id.clone())) as Arc<dyn OutputSink>,
@@ -353,6 +357,7 @@ mod tests {
                 &pool,
                 "nope-not-a-real-binary-xyz",
                 "/tmp".to_string(),
+                "15;0",
                 no_sinks,
             )
             .await
@@ -417,6 +422,7 @@ mod tests {
                     &pool,
                     "sh",
                     dir.path().to_string_lossy().into_owned(),
+                    "15;0",
                     no_sinks,
                 )
                 .await
@@ -449,6 +455,7 @@ mod tests {
                     &pool,
                     "sh",
                     dir.path().to_string_lossy().into_owned(),
+                    "15;0",
                     no_sinks,
                 )
                 .await
@@ -481,6 +488,7 @@ mod tests {
                     &pool,
                     "sh",
                     dir.path().to_string_lossy().into_owned(),
+                    "15;0",
                     no_sinks,
                 )
                 .await
@@ -510,7 +518,7 @@ mod tests {
                 init_repo_with_commit(dir.path());
                 let cwd = dir.path().to_string_lossy().into_owned();
 
-                let id = session_create_inner(&manager, &pool, "sh", cwd.clone(), no_sinks)
+                let id = session_create_inner(&manager, &pool, "sh", cwd.clone(), "15;0", no_sinks)
                     .await
                     .expect("session_create should succeed");
 

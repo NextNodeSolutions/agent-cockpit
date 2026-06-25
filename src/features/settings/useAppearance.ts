@@ -2,7 +2,8 @@ import { useSyncExternalStore } from 'react'
 
 import type { Appearance } from '@/features/sessions/ghosttyConfig'
 
-import { useSettings } from './settings'
+import { resolveAppearance } from './resolveAppearance'
+import { currentTheme, useSettings } from './settings'
 
 // The OS-level dark-mode query. Resolving `system` against it is a genuine
 // external-system read, so it goes through useSyncExternalStore rather than an
@@ -36,7 +37,11 @@ export const useAppearance = (): Appearance => {
 		getColorSchemeIsDark,
 		getColorSchemeIsDark,
 	)
-	if (theme === 'light') return 'light'
-	if (theme === 'dark') return 'dark'
-	return systemPrefersDark ? 'dark' : 'light'
+	return resolveAppearance(theme, systemPrefersDark)
 }
+
+// The appearance resolved ONCE, outside React: used when spawning a session so
+// the backend seeds the terminal's light/dark theme colors for what the user
+// actually sees, not a hardcoded default. The live hook above is for rendering.
+export const currentAppearance = (): Appearance =>
+	resolveAppearance(currentTheme(), getColorSchemeIsDark())

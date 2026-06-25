@@ -91,10 +91,10 @@ describe('launchTaskAgent', () => {
 		const sessionId = await launchTaskAgent(TASK)
 
 		expect(sessionId).toBe('sess-9')
-		expect(invokeMock).toHaveBeenCalledWith('session_create', {
-			binary: 'claude',
-			cwd: '/repo/x',
-		})
+		expect(invokeMock).toHaveBeenCalledWith(
+			'session_create',
+			expect.objectContaining({ binary: 'claude', cwd: '/repo/x' }),
+		)
 		expect(invokeMock).toHaveBeenCalledWith('tasks_update', {
 			repoPath: '/repo/x',
 			id: 'task-1',

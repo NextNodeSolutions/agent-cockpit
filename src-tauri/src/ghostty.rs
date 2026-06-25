@@ -148,12 +148,12 @@ fn term_rgb(color: Option<mizraj_config::Color>) -> Option<mizraj_term::Rgb> {
 /// the background/foreground/cursor a probing TUI reads (OSC 10/11/12) to pick
 /// its light/dark variant, plus the implied color scheme (DSR `?996n`).
 ///
-/// Resolves with the dark side of any `light:…,dark:…` theme — a session is
-/// spawned without the live system appearance to hand, and the common
-/// `theme = <name>` form is appearance-independent (resolves identically either
-/// way). A future change can thread the frontend's appearance through here.
-pub fn session_terminal_colors() -> mizraj_term::DefaultColors {
-    let config = load(&load_options(Appearance::Dark));
+/// `appearance` is the frontend's live light/dark (see `currentAppearance`), so a
+/// `light:…,dark:…` theme resolves the side the user actually sees — without it
+/// the dark side was always picked, reporting the wrong polarity on a light
+/// terminal. A plain `theme = <name>` resolves identically either way.
+pub fn session_terminal_colors(appearance: &str) -> mizraj_term::DefaultColors {
+    let config = load(&load_options(parse_appearance(appearance)));
     let background = term_rgb(config.background);
     mizraj_term::DefaultColors {
         background,
@@ -163,12 +163,13 @@ pub fn session_terminal_colors() -> mizraj_term::DefaultColors {
     }
 }
 
-/// The `COLORFGBG` value to advertise the resolved terminal as light or dark,
-/// for tools that read the env var instead of querying OSC 11 (the de-facto
-/// `fg;bg` convention — a light `bg` index, here `15`, means a light terminal;
-/// `0` a dark one). A belt-and-suspenders complement to the OSC 11 responder.
-pub fn session_colorfgbg() -> &'static str {
-    match session_terminal_colors().scheme {
+/// The `COLORFGBG` value advertising a resolved scheme as light or dark, for
+/// tools that read the env var instead of querying OSC 11 (the de-facto `fg;bg`
+/// convention — a light `bg` index, here `15`, means a light terminal; `0` a
+/// dark one). Pure: derived from the already-resolved scheme, no config reload —
+/// a belt-and-suspenders complement to the OSC 11 responder.
+pub fn colorfgbg_for(scheme: mizraj_term::ColorScheme) -> &'static str {
+    match scheme {
         mizraj_term::ColorScheme::Light => "0;15",
         mizraj_term::ColorScheme::Dark => "15;0",
     }

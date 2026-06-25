@@ -398,10 +398,10 @@ describe('MissionControl', () => {
 			)
 		})
 
-		expect(invokeMock).toHaveBeenCalledWith('session_create', {
-			binary: 'claude',
-			cwd: '/repo/x',
-		})
+		expect(invokeMock).toHaveBeenCalledWith(
+			'session_create',
+			expect.objectContaining({ binary: 'claude', cwd: '/repo/x' }),
+		)
 		expect(cards().length).toBeGreaterThan(0)
 	})
 
@@ -528,10 +528,10 @@ describe('MissionControl', () => {
 				?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
 		})
 
-		expect(invokeMock).toHaveBeenCalledWith('session_create', {
-			binary: 'claude',
-			cwd: '/repo/sleepy',
-		})
+		expect(invokeMock).toHaveBeenCalledWith(
+			'session_create',
+			expect.objectContaining({ binary: 'claude', cwd: '/repo/sleepy' }),
+		)
 	})
 
 	it('shows dormant repos even when no session lives at all', () => {

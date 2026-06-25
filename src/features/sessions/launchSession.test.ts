@@ -48,10 +48,10 @@ describe('launchSession', () => {
 		})
 
 		expect(launched).toBe(true)
-		expect(invokeMock).toHaveBeenCalledWith('session_create', {
-			binary: 'claude',
-			cwd: '/repo',
-		})
+		expect(invokeMock).toHaveBeenCalledWith(
+			'session_create',
+			expect.objectContaining({ binary: 'claude', cwd: '/repo' }),
+		)
 		expect(store.get(sessionsAtom)['sess-9']?.binary).toBe('claude')
 		expect(navigateMock).toHaveBeenCalledWith('/run/sess-9')
 	})
@@ -87,10 +87,10 @@ describe('launchShellSession', () => {
 		const launched = await launchShellSession('/repo')
 
 		expect(launched).toBe(true)
-		expect(invokeMock).toHaveBeenCalledWith('session_create', {
-			binary: '/bin/fish',
-			cwd: '/repo',
-		})
+		expect(invokeMock).toHaveBeenCalledWith(
+			'session_create',
+			expect.objectContaining({ binary: '/bin/fish', cwd: '/repo' }),
+		)
 		expect(store.get(sessionsAtom)['sess-7']?.binary).toBe('/bin/fish')
 	})
 })

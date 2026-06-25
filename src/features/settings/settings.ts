@@ -105,6 +105,14 @@ export const resetSettingsForTests = (): void => {
 	})
 }
 
+/**
+ * The current theme setting, read once outside React (e.g. when spawning a
+ * session, which is not a component). Mirrors `useSettings().theme` without a
+ * subscription — callers that just need a snapshot use this.
+ */
+export const currentTheme = (): Theme =>
+	getDefaultStore().get(settingsStateAtom).theme
+
 export type UseSettings = Settings & {
 	ready: boolean
 	setTheme: (theme: Theme) => Promise<void>

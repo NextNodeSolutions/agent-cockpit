@@ -513,10 +513,10 @@ describe('PipelineView', () => {
 			launch?.click()
 		})
 
-		expect(invokeMock).toHaveBeenCalledWith('session_create', {
-			binary: 'claude',
-			cwd: '/repo',
-		})
+		expect(invokeMock).toHaveBeenCalledWith(
+			'session_create',
+			expect.objectContaining({ binary: 'claude', cwd: '/repo' }),
+		)
 		expect(invokeMock).toHaveBeenCalledWith(
 			'tasks_update',
 			expect.objectContaining({ id: 'task-backlog' }),

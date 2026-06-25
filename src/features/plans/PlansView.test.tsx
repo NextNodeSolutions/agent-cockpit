@@ -257,7 +257,7 @@ describe('PlansView', () => {
 			call => call[0] === 'session_create',
 		)
 		expect(spawns).toHaveLength(2)
-		expect(spawns[0]?.[1]).toEqual({ binary: 'claude', cwd: '/repo' })
+		expect(spawns[0]?.[1]).toMatchObject({ binary: 'claude', cwd: '/repo' })
 		const messages = getDefaultStore()
 			.get(toastsAtom)
 			.map(toast => toast.message)

@@ -8,11 +8,33 @@ use mizraj_vcs::{origin_url, repo_open};
 /// Resolve the per-project progress database path:
 /// `$HOME/Mizraj/<slug>/progress.db`, where `<slug>` identifies the active
 /// project (see [`repo_slug`]).
+/// The directory `Mizraj/<slug>/progress.db` is rooted at: the resolved home,
+/// or `fallback` when home is unresolved OR empty. Pure (inputs injected) so the
+/// "never a relative path" guarantee is testable. An empty home is treated as
+/// unresolved — `home_dir().unwrap_or_default()` used to return `""` on a
+/// no-`$HOME` launch, rooting the DB at a relative path (the process CWD).
+fn db_base(home: Option<PathBuf>, fallback: PathBuf) -> PathBuf {
+    match home {
+        Some(home) if !home.as_os_str().is_empty() => home,
+        _ => fallback,
+    }
+}
+
 pub(super) fn progress_db_path(slug: &str) -> PathBuf {
     // `home_dir()` reads `$HOME`, then falls back to the passwd database
     // (getpwuid) so a Finder/launchd launch with no `$HOME` still resolves.
-    let home = std::env::home_dir().unwrap_or_default();
-    home.join("Mizraj").join(slug).join("progress.db")
+    let home = std::env::home_dir().filter(|home| !home.as_os_str().is_empty());
+    if home.is_none() {
+        // Both `$HOME` and the passwd lookup failed: keep the DB at an absolute
+        // location (the temp dir) rather than a CWD-relative path, and say so —
+        // project data may not persist, but it never silently lands under `/`.
+        tracing::error!(
+            "home dir unresolved ($HOME unset and passwd lookup failed); \
+             progress.db falls back to the temp dir and may not persist"
+        );
+    }
+    let base = db_base(home, std::env::temp_dir());
+    base.join("Mizraj").join(slug).join("progress.db")
 }
 
 /// Derive a stable slug for `repo_path`: the last segment of the `origin` remote
@@ -109,5 +131,27 @@ mod tests {
     fn progress_db_path_lives_under_home_mizraj_slug() {
         let path = progress_db_path("mizraj");
         assert!(path.ends_with("Mizraj/mizraj/progress.db"));
+    }
+
+    #[test]
+    fn db_base_prefers_a_resolved_home() {
+        assert_eq!(
+            db_base(Some(PathBuf::from("/Users/x")), PathBuf::from("/tmp")),
+            PathBuf::from("/Users/x")
+        );
+    }
+
+    #[test]
+    fn db_base_falls_back_to_the_absolute_path_when_home_is_unresolved() {
+        let fallback = PathBuf::from("/var/folders/tmp");
+        assert_eq!(db_base(None, fallback.clone()), fallback);
+    }
+
+    #[test]
+    fn db_base_treats_an_empty_home_as_unresolved_so_the_path_stays_absolute() {
+        // The original `home_dir().unwrap_or_default()` yielded an EMPTY home on
+        // a no-$HOME launch, rooting progress.db at a *relative* path (the CWD).
+        let fallback = PathBuf::from("/var/folders/tmp");
+        assert_eq!(db_base(Some(PathBuf::new()), fallback.clone()), fallback);
     }
 }

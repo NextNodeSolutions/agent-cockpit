@@ -19,10 +19,11 @@ export type SessionState = {
 }
 
 /// A session's PTY exited. The session is dropped from the store on this event
-/// (no kept history yet); `exit_code` is part of the backend wire shape but
-/// unused on the front for now.
+/// (no kept history yet); `exit_code` (0 = clean) lets the bridge toast an
+/// unexpected exit so a crashing agent doesn't vanish without a trace.
 export type SessionEndPayload = {
 	session_id: string
+	exit_code: number
 }
 
 export const AGENT_END_EVENT = 'agent:end'

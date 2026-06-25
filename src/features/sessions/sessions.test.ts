@@ -1,6 +1,8 @@
 import { getDefaultStore } from 'jotai'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { toastsAtom } from '@/shared/toasts'
+
 const listenMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@tauri-apps/api/event', () => ({
@@ -11,6 +13,7 @@ import {
 	resetAgentEventsBridgeForTests,
 	startAgentEventsBridge,
 } from './agentEventsBridge'
+import { markIntentionalClose } from './sessionExit'
 import {
 	AGENT_ACTIVITY_EVENT,
 	AGENT_CELLS_EVENT,
@@ -105,6 +108,7 @@ describe('startAgentEventsBridge', () => {
 		resetAgentEventsBridgeForTests()
 		store.set(sessionsAtom, {})
 		store.set(cellFramesAtom, {})
+		store.set(toastsAtom, [])
 		listenMock.mockReset()
 		unlistenMock.mockReset()
 		listenMock.mockResolvedValue(unlistenMock)
@@ -159,8 +163,42 @@ describe('startAgentEventsBridge', () => {
 			binary: 'claude',
 			repoPath: '/repo',
 		})
-		handler({ payload: { session_id: 'sess-a' } })
+		handler({ payload: { session_id: 'sess-a', exit_code: 0 } })
 
+		expect(store.get(sessionsAtom)['sess-a']).toBeUndefined()
+	})
+
+	it('toasts an unexpected non-zero exit before dropping the session', () => {
+		startAgentEventsBridge()
+		const handler = getCapturedEndHandler()
+
+		store.set(startSessionAtom, {
+			id: 'sess-a',
+			binary: 'claude',
+			repoPath: '/repo',
+		})
+		handler({ payload: { session_id: 'sess-a', exit_code: 137 } })
+
+		const messages = store.get(toastsAtom).map(toast => toast.message)
+		expect(messages).toContain('claude exited with code 137')
+		expect(store.get(sessionsAtom)['sess-a']).toBeUndefined()
+	})
+
+	it('stays silent when the user closed the session on purpose', () => {
+		startAgentEventsBridge()
+		const handler = getCapturedEndHandler()
+
+		store.set(startSessionAtom, {
+			id: 'sess-a',
+			binary: 'claude',
+			repoPath: '/repo',
+		})
+		// closeSession marks the id before the kill; the signal-based exit code
+		// that follows must NOT read as a crash.
+		markIntentionalClose('sess-a')
+		handler({ payload: { session_id: 'sess-a', exit_code: 137 } })
+
+		expect(store.get(toastsAtom)).toEqual([])
 		expect(store.get(sessionsAtom)['sess-a']).toBeUndefined()
 	})
 

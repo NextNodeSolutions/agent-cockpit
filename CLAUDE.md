@@ -13,9 +13,9 @@ Screens are mapped path→component in `src/app/MainContent.tsx`; routes live in
 the ⌘ chords. Their entries were removed from `shellViews.tsx`, nothing else.
 Both remain fully wired and shippable — do not delete their modules or routes:
 
-| Feature | Module | Route(s) | Still reachable via |
-|---------|--------|----------|---------------------|
-| Board   | `src/features/pipeline/` | `/pipeline` (MainContent ROUTES) | URL |
+| Feature | Module                   | Route(s)                                                                 | Still reachable via   |
+| ------- | ------------------------ | ------------------------------------------------------------------------ | --------------------- |
+| Board   | `src/features/pipeline/` | `/pipeline` (MainContent ROUTES)                                         | URL                   |
 | Plans   | `src/features/plans/`    | `/plans`, `/plans/:kind/:slug` (Plans is MainContent's `FALLBACK_ROUTE`) | URL + command palette |
 
 `features/review/reviewFiles.ts` is shared by pipeline, diff, projects and

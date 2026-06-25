@@ -36,6 +36,17 @@ pub fn run() {
                 .join("projects.json");
             let registry = project::registry::Registry::load(&registry_path)
                 .map_err(|err| format!("load project registry: {err}"))?;
+            // Enrich PATH from the user's login shell BEFORE spawning any thread
+            // that reads the environment (the watcher task below, libgit2 in it):
+            // `set_var` mutates the process environment unsynchronized, so a
+            // concurrent `getenv` on another thread mid-write is a data race.
+            // Bounded by a timeout on a worker thread so a hanging rc (network
+            // home, an rc blocking on I/O) can't stall `setup` past it — `setup`
+            // must return before the window can paint.
+            #[cfg(target_os = "macos")]
+            if let Some(path) = session::path::capture_login_shell_path_bounded() {
+                std::env::set_var("PATH", path);
+            }
             // Every registered repo gets its filesystem watcher at startup
             // (MP6): the registry is the single source of truth of what is
             // watched. A repo deleted from disk logs an error and is skipped.
@@ -54,13 +65,6 @@ pub fn run() {
                     project::watcher::watch_and_emit(&watchers, &handle, &repo);
                 }
             });
-            // Bounded by a timeout on a worker thread: a user's shell rc that
-            // hangs (network-mounted home, an rc blocking on I/O) must never
-            // stall `setup`, which has to return before the window can paint.
-            #[cfg(target_os = "macos")]
-            if let Some(path) = session::path::capture_login_shell_path_bounded() {
-                std::env::set_var("PATH", path);
-            }
             // Point the Ghostty config loader at the app-bundled theme corpus so
             // `theme = <name>` resolves without an external Ghostty install. In
             // `tauri dev` the resource dir is not populated, so fall back to the

@@ -34,9 +34,7 @@
 			"minimumSystemVersion": "13.2",
 			"signingIdentity": "-",
 			"entitlements": "Entitlements.plist",
-			"frameworks": [
-				"../target/libghostty/libghostty.dylib"
-			]
+			"frameworks": ["../target/libghostty/libghostty.dylib"]
 		},
 		"icon": [
 			"icons/32x32.png",

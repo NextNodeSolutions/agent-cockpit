@@ -12,6 +12,17 @@ import type { SessionState } from '@/features/sessions/sessions'
  * `useSessionActivity`). */
 export type StatusOf = (session: SessionState) => SessionDisplayStatus
 
+/**
+ * How many sessions resolve to `status` under `statusOf`. Shared by the wall's
+ * filter chips and each project group's header so the two counts can never
+ * drift.
+ */
+export const countByStatus = (
+	sessions: ReadonlyArray<SessionState>,
+	status: SessionDisplayStatus,
+	statusOf: StatusOf,
+): number => sessions.filter(session => statusOf(session) === status).length
+
 const STATUS_ORDER: Readonly<Record<SessionDisplayStatus, number>> = {
 	running: 0,
 	needInput: 1,

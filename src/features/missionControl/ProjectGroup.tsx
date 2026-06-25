@@ -1,7 +1,6 @@
 import { useState } from 'react'
 
 import { useRepoStats } from '@/features/projects/useRepoStats'
-import type { SessionDisplayStatus } from '@/features/sessions/displayStatus'
 import { sessionDisplayStatus } from '@/features/sessions/displayStatus'
 import { launchSession } from '@/features/sessions/launchSession'
 import type { SessionState } from '@/features/sessions/sessions'
@@ -11,17 +10,16 @@ import { IconPlus } from '@/shared/ui/icons'
 
 import { AgentCard } from './AgentCard'
 import type { SessionGroup, StatusOf } from './projectGroups'
-import { compactPath, projectHue, projectName } from './projectGroups'
+import {
+	compactPath,
+	countByStatus,
+	projectHue,
+	projectName,
+} from './projectGroups'
 
 const STAGGER_STEP_MS = 45
 
 const AGENT_BINARY = 'claude'
-
-const countOf = (
-	sessions: ReadonlyArray<SessionState>,
-	status: SessionDisplayStatus,
-	statusOf: StatusOf,
-): number => sessions.filter(session => statusOf(session) === status).length
 
 type Props = {
 	group: SessionGroup
@@ -48,8 +46,8 @@ export const ProjectGroup = ({
 	// Header stats always describe the whole group, never the filtered view.
 	const statusOf: StatusOf = session =>
 		sessionDisplayStatus(activityFor(session.id))
-	const runningCount = countOf(group.sessions, 'running', statusOf)
-	const idleCount = countOf(group.sessions, 'idle', statusOf)
+	const runningCount = countByStatus(group.sessions, 'running', statusOf)
+	const idleCount = countByStatus(group.sessions, 'idle', statusOf)
 
 	return (
 		<section

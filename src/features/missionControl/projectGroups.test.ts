@@ -5,6 +5,7 @@ import type { SessionState } from '@/features/sessions/sessions'
 import {
 	HUES,
 	compactPath,
+	countByStatus,
 	dormantRepos,
 	groupSessionsByRepo as groupSessionsByRepoImpl,
 	orderProjectGroups,
@@ -41,6 +42,19 @@ const groupSessionsByRepo = (
 	statusOf: StatusOf = allRunning,
 ): ReturnType<typeof groupSessionsByRepoImpl> =>
 	groupSessionsByRepoImpl(sessions, statusOf)
+
+describe('countByStatus', () => {
+	it('counts the sessions whose resolved status matches', () => {
+		const sessions = [session('a'), session('b'), session('c')]
+		const oneIdle = idleFor(['b'])
+		expect(countByStatus(sessions, 'idle', oneIdle)).toBe(1)
+		expect(countByStatus(sessions, 'running', oneIdle)).toBe(2)
+	})
+
+	it('is zero when nothing matches', () => {
+		expect(countByStatus([session('a')], 'idle', allRunning)).toBe(0)
+	})
+})
 
 describe('groupSessionsByRepo', () => {
 	it('groups sessions by repo, in first-seen order', () => {

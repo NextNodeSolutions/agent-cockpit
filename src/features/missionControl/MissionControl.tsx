@@ -10,7 +10,6 @@ import {
 import { useProjects } from '@/features/projects/useProjects'
 import { sessionDisplayStatus } from '@/features/sessions/displayStatus'
 import { RunAgentButton } from '@/features/sessions/RunAgentButton'
-import type { SessionState } from '@/features/sessions/sessions'
 import { useSessionActivity } from '@/features/sessions/useSessionActivity'
 import { useSessions } from '@/features/sessions/useSessions'
 import { SDot } from '@/shared/ui/atoms'
@@ -18,6 +17,7 @@ import { SDot } from '@/shared/ui/atoms'
 import { DormantSection } from './DormantSection'
 import { ProjectGroup } from './ProjectGroup'
 import {
+	countByStatus,
 	dormantRepos,
 	groupSessionsByRepo,
 	visibleProjectGroups,
@@ -40,12 +40,6 @@ const CHIP_DOT: Readonly<Record<MissionControlFilter, 'run' | 'idle'>> = {
 
 const chipHref = (key: MissionFilter): string =>
 	key === 'all' ? missionControlHref() : missionControlHref(key)
-
-const countByStatus = (
-	sessions: ReadonlyArray<SessionState>,
-	status: MissionControlFilter,
-	statusOf: StatusOf,
-): number => sessions.filter(session => statusOf(session) === status).length
 
 // Shared by the populated screen and its zero-session state.
 const MissionControlHead = (): React.JSX.Element => (

@@ -23,11 +23,19 @@ const DEFAULT_TERM_ENV: &[(&str, &str)] = &[
 ];
 
 /// Merge [`DEFAULT_TERM_ENV`] with the caller's `env`, the caller winning on key
-/// collisions. Extracted as a pure function so the override precedence is
-/// unit-testable without spawning a process.
-fn effective_env(env: &HashMap<String, String>) -> BTreeMap<String, String> {
+/// collisions. A default is seeded ONLY when the parent environment lacks that
+/// key (`is_inherited` reports false): portable-pty applies the parent env as
+/// the spawn base, so seeding a default for an inherited key would override the
+/// user's real value (e.g. clobbering a login `LANG=fr_FR.UTF-8` with the
+/// `en_US.UTF-8` fallback). Extracted as a pure function — `is_inherited` is
+/// injected — so the precedence is unit-testable without spawning a process.
+fn effective_env(
+    env: &HashMap<String, String>,
+    is_inherited: impl Fn(&str) -> bool,
+) -> BTreeMap<String, String> {
     let mut merged: BTreeMap<String, String> = DEFAULT_TERM_ENV
         .iter()
+        .filter(|(key, _)| !is_inherited(key) && !env.contains_key(*key))
         .map(|(k, v)| ((*k).to_string(), (*v).to_string()))
         .collect();
     merged.extend(env.iter().map(|(k, v)| (k.clone(), v.clone())));
@@ -76,7 +84,7 @@ pub fn spawn(
     // prompt themes) calls `tput`, which aborts with "No value for $TERM".
     // portable-pty does not set `TERM` itself, so seed sane terminal defaults
     // ([`DEFAULT_TERM_ENV`]) under the caller's `env`, which keeps priority.
-    for (k, v) in effective_env(env) {
+    for (k, v) in effective_env(env, |key| std::env::var_os(key).is_some()) {
         cmd.env(k, v);
     }
 
@@ -108,9 +116,14 @@ pub fn spawn(
 mod tests {
     use super::*;
 
+    // No var is inherited from the parent in these cases.
+    fn nothing_inherited(_key: &str) -> bool {
+        false
+    }
+
     #[test]
     fn seeds_terminal_defaults_when_caller_env_is_empty() {
-        let env = effective_env(&HashMap::new());
+        let env = effective_env(&HashMap::new(), nothing_inherited);
         assert_eq!(env.get("TERM").map(String::as_str), Some("xterm-256color"));
         assert_eq!(env.get("COLORTERM").map(String::as_str), Some("truecolor"));
         assert_eq!(env.get("LANG").map(String::as_str), Some("en_US.UTF-8"));
@@ -119,7 +132,7 @@ mod tests {
     #[test]
     fn caller_env_overrides_seeded_defaults() {
         let caller = HashMap::from([("TERM".to_string(), "dumb".to_string())]);
-        let env = effective_env(&caller);
+        let env = effective_env(&caller, nothing_inherited);
         // Caller wins on the colliding key...
         assert_eq!(env.get("TERM").map(String::as_str), Some("dumb"));
         // ...while the non-colliding defaults are still seeded.
@@ -130,8 +143,28 @@ mod tests {
     #[test]
     fn caller_env_extra_vars_are_preserved() {
         let caller = HashMap::from([("FOO".to_string(), "bar".to_string())]);
-        let env = effective_env(&caller);
+        let env = effective_env(&caller, nothing_inherited);
         assert_eq!(env.get("FOO").map(String::as_str), Some("bar"));
         assert_eq!(env.get("TERM").map(String::as_str), Some("xterm-256color"));
+    }
+
+    #[test]
+    fn an_inherited_var_keeps_the_parents_value_instead_of_the_default() {
+        // The parent exports LANG (a login locale); mizraj must NOT seed its
+        // en_US fallback, so portable-pty's inherited base env value survives.
+        let env = effective_env(&HashMap::new(), |key| key == "LANG");
+        assert_eq!(env.get("LANG"), None);
+        // The vars the parent lacks are still seeded as before.
+        assert_eq!(env.get("TERM").map(String::as_str), Some("xterm-256color"));
+        assert_eq!(env.get("COLORTERM").map(String::as_str), Some("truecolor"));
+    }
+
+    #[test]
+    fn caller_env_still_wins_over_an_inherited_var() {
+        // An explicit caller value (e.g. COLORFGBG, or a forced TERM) overrides
+        // the inherited parent value — caller intent beats inheritance.
+        let caller = HashMap::from([("TERM".to_string(), "dumb".to_string())]);
+        let env = effective_env(&caller, |key| key == "TERM");
+        assert_eq!(env.get("TERM").map(String::as_str), Some("dumb"));
     }
 }

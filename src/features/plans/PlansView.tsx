@@ -2,6 +2,7 @@ import { pushToast } from '@/shared/toasts'
 import { Panel, PanelHead } from '@/shared/ui/atoms'
 import { IconPlus } from '@/shared/ui/icons'
 import { useNow } from '@/shared/useNow'
+import { usePanelCollapse } from '@/shared/usePanelCollapse'
 
 import { usePlans } from './plans'
 import { PlansMenu } from './PlansMenu'
@@ -26,10 +27,15 @@ type Props = {
 export const PlansView = ({ activeProjectPath }: Props): React.JSX.Element => {
 	const plansState = usePlans(activeProjectPath)
 	const nowMs = useNow(AGE_REFRESH_MS)
+	const { collapsed, toggle } = usePanelCollapse('plans.list')
 	return (
 		<section className="pl-wrap stagger" aria-label="Plans">
-			<Panel className="pl-list-panel">
-				<PanelHead title="Plans & interviews">
+			<Panel className="pl-list-panel" collapsed={collapsed}>
+				<PanelHead
+					title="Plans & interviews"
+					collapsed={collapsed}
+					onToggleCollapse={toggle}
+				>
 					<button
 						type="button"
 						className="mz-iconbtn"
@@ -39,7 +45,7 @@ export const PlansView = ({ activeProjectPath }: Props): React.JSX.Element => {
 						<IconPlus />
 					</button>
 				</PanelHead>
-				<PlansMenu state={plansState} nowMs={nowMs} />
+				{!collapsed && <PlansMenu state={plansState} nowMs={nowMs} />}
 			</Panel>
 			<Panel className="pl-doc-panel">
 				<PlanView

@@ -97,6 +97,7 @@ describe('PlansView', () => {
 	let root: Root
 
 	beforeEach(() => {
+		localStorage.clear()
 		invokeMock.mockReset()
 		invokeMock.mockImplementation((command: string) => {
 			if (command === 'list_plans') return Promise.resolve(PLAN_ENTRIES)
@@ -140,6 +141,25 @@ describe('PlansView', () => {
 		expect(firstRow?.getAttribute('href')).toBe(
 			'/plans/plan/auth-hardening',
 		)
+	})
+
+	it('folds the plans list away when its dock is collapsed', async () => {
+		await render()
+
+		expect(container.querySelector('.pl-list-panel a')).not.toBeNull()
+		const toggle = container.querySelector<HTMLButtonElement>(
+			'.pl-list-panel .panel-collapse',
+		)
+		await act(async () => {
+			toggle?.click()
+		})
+
+		expect(container.querySelector('.pl-list-panel a')).toBeNull()
+		expect(
+			container
+				.querySelector('.pl-list-panel')
+				?.getAttribute('data-collapsed'),
+		).toBe('true')
 	})
 
 	it('toasts that new interviews come from the agent workflow', async () => {

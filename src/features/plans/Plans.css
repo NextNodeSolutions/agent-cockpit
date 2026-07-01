@@ -9,9 +9,17 @@
 	flex: 1;
 	min-height: 0;
 	display: grid;
-	grid-template-columns: 262px 1fr;
+	/* The list dock sizes to its own width so collapsing it narrows the track
+	   and the document panel (1fr) reclaims the freed space. */
+	grid-template-columns: auto 1fr;
 	gap: var(--sp-gap);
 	padding: var(--sp-gap) var(--sp-panel) var(--sp-panel);
+}
+.pl-list-panel {
+	width: 262px;
+}
+.pl-list-panel[data-collapsed='true'] {
+	width: var(--panel-band);
 }
 .pl-list-panel,
 .pl-doc-panel {

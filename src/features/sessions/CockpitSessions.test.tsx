@@ -30,6 +30,7 @@ describe('CockpitSessions', () => {
 	let root: Root
 
 	beforeEach(() => {
+		localStorage.clear()
 		store.set(sessionsAtom, {})
 		navigateMock.mockReset()
 		launchSessionMock.mockReset()
@@ -205,5 +206,37 @@ describe('CockpitSessions', () => {
 			dot => dot.className,
 		)
 		expect(dots).toEqual(['sdot sdot-run', 'sdot sdot-run'])
+	})
+
+	const collapseToggle = (): HTMLButtonElement | null =>
+		container.querySelector<HTMLButtonElement>('.fc-sess .panel-collapse')
+
+	it('folds the session list away when the dock is collapsed', () => {
+		seed('run-1')
+		seed('run-2')
+		render('run-1')
+
+		expect(container.querySelectorAll('.lrow')).toHaveLength(2)
+		act(() => {
+			collapseToggle()?.click()
+		})
+
+		// The dock keeps its head as a band; the rows and foot are unmounted.
+		expect(container.querySelector('nav[aria-label="Sessions"]')).toBeNull()
+		expect(container.querySelector('.fc-sess-foot')).toBeNull()
+		expect(collapseToggle()?.getAttribute('aria-expanded')).toBe('false')
+	})
+
+	it('marks the sessions panel collapsed for the thin-band styling', () => {
+		seed('run-1')
+		render('run-1')
+
+		act(() => {
+			collapseToggle()?.click()
+		})
+
+		expect(
+			container.querySelector('.fc-sess')?.getAttribute('data-collapsed'),
+		).toBe('true')
 	})
 })

@@ -9,7 +9,9 @@
 	flex: 1;
 	min-height: 0;
 	display: grid;
-	grid-template-columns: 248px 1fr 320px;
+	/* The side docks size to their own width so a collapsed one narrows its
+	   track and the terminal (1fr) reclaims the freed space. */
+	grid-template-columns: auto 1fr auto;
 	gap: var(--sp-gap);
 	padding: var(--sp-gap) var(--sp-panel) var(--sp-panel);
 }
@@ -22,16 +24,23 @@
 	--si: 2;
 }
 @media (max-width: 1180px) {
-	.fc-wrap {
-		grid-template-columns: 220px 1fr;
+	.fc-sess {
+		width: 220px;
 	}
 	.fc-diffs {
 		display: none;
 	}
 }
 
+/* A collapsed dock folds to a thin band; its head stays as the re-open grip. */
+.fc-sess[data-collapsed='true'],
+.fc-diffs[data-collapsed='true'] {
+	width: var(--panel-band);
+}
+
 /* ---- 1. left: sessions panel ---- */
 .fc-sess {
+	width: 248px;
 	overflow: hidden;
 }
 .fc-sess .mz-iconbtn {
@@ -120,6 +129,7 @@
 
 /* ---- 3. right: diff dock ---- */
 .fc-diffs {
+	width: 320px;
 	overflow: hidden;
 }
 .fc-dfiles {

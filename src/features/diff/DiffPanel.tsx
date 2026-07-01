@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react'
 import { navigate, reviewHref } from '@/app/router'
 import { reviewFilesFromParsed } from '@/features/review/reviewFiles'
 import { PanelHead } from '@/shared/ui/atoms'
+import { usePanelCollapse } from '@/shared/usePanelCollapse'
 
 import { DiffPanelBody } from './DiffPanelBody'
 import { DiffPanelFiles } from './DiffPanelFiles'
@@ -29,6 +30,7 @@ export const DiffPanel = ({ repoPath }: Props): React.JSX.Element => {
 		[parsedFiles],
 	)
 	const [selectedPath, setSelectedPath] = useState<string | null>(null)
+	const { collapsed, toggle } = usePanelCollapse('cockpit.diffs')
 
 	const selected =
 		files.find(file => file.path === selectedPath) ?? files[0] ?? null
@@ -51,8 +53,17 @@ export const DiffPanel = ({ repoPath }: Props): React.JSX.Element => {
 	}
 
 	return (
-		<aside className="panel fc-diffs" aria-label="Diffs">
-			<PanelHead title="Diffs" count={`${files.length} files`}>
+		<aside
+			className="panel fc-diffs"
+			aria-label="Diffs"
+			data-collapsed={String(collapsed)}
+		>
+			<PanelHead
+				title="Diffs"
+				count={`${files.length} files`}
+				collapsed={collapsed}
+				onToggleCollapse={toggle}
+			>
 				<button
 					type="button"
 					className="btn btn-sm btn-outline"
@@ -61,21 +72,23 @@ export const DiffPanel = ({ repoPath }: Props): React.JSX.Element => {
 					Open review ↗
 				</button>
 			</PanelHead>
-			<DiffPanelBody state={state}>
-				<DiffPanelFiles
-					files={files}
-					selectedPath={selected?.path ?? null}
-					onSelect={selectRow}
-				/>
-				<div className="fc-dhunk">
-					{selectedMeta !== null && (
-						<DiffPanelPreview
-							key={selectedMeta.name}
-							fileDiff={selectedMeta}
-						/>
-					)}
-				</div>
-			</DiffPanelBody>
+			{!collapsed && (
+				<DiffPanelBody state={state}>
+					<DiffPanelFiles
+						files={files}
+						selectedPath={selected?.path ?? null}
+						onSelect={selectRow}
+					/>
+					<div className="fc-dhunk">
+						{selectedMeta !== null && (
+							<DiffPanelPreview
+								key={selectedMeta.name}
+								fileDiff={selectedMeta}
+							/>
+						)}
+					</div>
+				</DiffPanelBody>
+			)}
 		</aside>
 	)
 }

@@ -39,6 +39,7 @@
 	--sp-card: 8px;
 	--sp-gap: 3px;
 	--h-control: 32px;
+	--panel-band: 40px; /* width a collapsed peripheral dock folds to */
 	--fs-body: 13.5px;
 	--fs-sm: 12.5px;
 	--fs-xs: 11px;

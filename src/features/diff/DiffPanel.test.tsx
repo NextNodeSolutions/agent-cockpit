@@ -81,6 +81,7 @@ describe('DiffPanel dock', () => {
 	let root: Root
 
 	beforeEach(() => {
+		localStorage.clear()
 		invokeMock.mockReset()
 		navigateMock.mockReset()
 		container = document.createElement('div')
@@ -216,6 +217,27 @@ describe('DiffPanel dock', () => {
 		})
 
 		expect(navigateMock).toHaveBeenCalledWith('/review')
+	})
+
+	const collapseToggle = (): HTMLButtonElement | null =>
+		container.querySelector<HTMLButtonElement>('.fc-diffs .panel-collapse')
+
+	it('folds the diff body away when the dock is collapsed', async () => {
+		invokeMock.mockResolvedValue({ patch: TWO_FILE_PATCH })
+		await mount()
+
+		expect(container.querySelector('.fc-dfiles')).not.toBeNull()
+		act(() => {
+			collapseToggle()?.click()
+		})
+
+		expect(container.querySelector('.fc-dfiles')).toBeNull()
+		expect(container.querySelector('.fc-dhunk')).toBeNull()
+		expect(
+			container
+				.querySelector('.fc-diffs')
+				?.getAttribute('data-collapsed'),
+		).toBe('true')
 	})
 
 	it('idles without a repository', async () => {

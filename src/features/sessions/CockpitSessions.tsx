@@ -5,6 +5,7 @@ import { formatSessionAge } from '@/features/missionControl/sessionAge'
 import { Panel, PanelHead, SDot } from '@/shared/ui/atoms'
 import { IconPlus } from '@/shared/ui/icons'
 import { useNow } from '@/shared/useNow'
+import { usePanelCollapse } from '@/shared/usePanelCollapse'
 
 import { sessionDotKind } from './displayStatus'
 import type { SessionActivity } from './displayStatus'
@@ -112,6 +113,7 @@ export const CockpitSessions = ({
 	const sessions = useSessions()
 	const now = useNow(AGE_REFRESH_MS)
 	const activityFor = useSessionActivity()
+	const { collapsed, toggle } = usePanelCollapse('cockpit.sessions')
 	// The cockpit is per-repo (MP2): it follows the active session's repo, so it
 	// lists only that repo's sessions — a sibling repo's agents never bleed in.
 	// Before any repo is followed (null) nothing scopes the list, so show all.
@@ -124,28 +126,37 @@ export const CockpitSessions = ({
 	const showRepo = activeProjectPath === null
 
 	return (
-		<Panel className="fc-sess">
-			<PanelHead title="Sessions" count={repoSessions.length}>
+		<Panel className="fc-sess" collapsed={collapsed}>
+			<PanelHead
+				title="Sessions"
+				count={repoSessions.length}
+				collapsed={collapsed}
+				onToggleCollapse={toggle}
+			>
 				{activeProjectPath !== null && (
 					<NewSessionButton repoPath={activeProjectPath} />
 				)}
 			</PanelHead>
-			<nav className="fc-sess-list" aria-label="Sessions">
-				{repoSessions.map(session => (
-					<SessionRow
-						key={session.id}
-						session={session}
-						active={session.id === activeSessionId}
-						now={now}
-						showRepo={showRepo}
-						activity={activityFor(session.id)}
-					/>
-				))}
-			</nav>
-			<div className="fc-sess-foot">
-				<span className="mz-kbd">⌘K</span>
-				<span>jump between agents</span>
-			</div>
+			{!collapsed && (
+				<>
+					<nav className="fc-sess-list" aria-label="Sessions">
+						{repoSessions.map(session => (
+							<SessionRow
+								key={session.id}
+								session={session}
+								active={session.id === activeSessionId}
+								now={now}
+								showRepo={showRepo}
+								activity={activityFor(session.id)}
+							/>
+						))}
+					</nav>
+					<div className="fc-sess-foot">
+						<span className="mz-kbd">⌘K</span>
+						<span>jump between agents</span>
+					</div>
+				</>
+			)}
 		</Panel>
 	)
 }

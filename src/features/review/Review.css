@@ -93,9 +93,42 @@
 	flex: 1;
 	min-height: 0;
 	display: grid;
-	grid-template-columns: 260px minmax(0, 1fr) 320px;
+	/* Side docks size to their panel width so a collapsed one narrows its
+	   track and the diff pane (1fr) reclaims the freed space. */
+	grid-template-columns: auto minmax(0, 1fr) auto;
 	gap: var(--sp-gap);
 	padding: 0 var(--sp-panel) var(--sp-panel);
+}
+.review-tree {
+	width: 260px;
+}
+.review-rail {
+	width: 320px;
+}
+/* Collapsed docks fold to a thin band; the diff pane widens to fill it. */
+.review-tree[data-collapsed='true'],
+.review-rail[data-collapsed='true'] {
+	width: var(--panel-band);
+}
+/* The rail has no panel-head, so its collapse control rides a small band
+   at the top-right corner, staying reachable when the dock is folded. */
+.review-rail__band {
+	display: flex;
+	justify-content: flex-end;
+	padding: 7px 7px 0;
+	flex: none;
+}
+.review-rail[data-collapsed='true'] .review-rail__band {
+	justify-content: center;
+	padding: 7px 0 0;
+}
+/* Folded tree: the progress row keeps only the chevron as the re-open grip. */
+.review-tree[data-collapsed='true'] .review-tree__progress {
+	justify-content: center;
+	padding: 11px 0 4px;
+}
+.review-tree[data-collapsed='true'] .review-tree__progress > :not(.panel-collapse) {
+	display: none;
 }
 
 /* .stagger (components.css) reads --si per child for the riseIn delay. */

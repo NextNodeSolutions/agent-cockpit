@@ -1,6 +1,7 @@
 import { useAtomValue } from 'jotai'
 
-import { DiffStat } from '@/shared/ui/atoms'
+import { CollapseToggle, DiffStat } from '@/shared/ui/atoms'
+import { usePanelCollapse } from '@/shared/usePanelCollapse'
 
 import type { ReviewFile } from './reviewFiles'
 import { CHANGE_BADGE } from './reviewFiles'
@@ -21,13 +22,18 @@ export const ReviewTree = ({
 	onSelect,
 }: Props): React.JSX.Element => {
 	const viewed = useAtomValue(viewedFilesAtom)
+	const { collapsed, toggle } = usePanelCollapse('review.tree')
 	const progress = reviewProgress(
 		viewed,
 		files.map(file => file.path),
 	)
 
 	return (
-		<nav className="panel review-tree" aria-label="Changed files">
+		<nav
+			className="panel review-tree"
+			aria-label="Changed files"
+			data-collapsed={String(collapsed)}
+		>
 			<div className="review-tree__progress">
 				<span>
 					{progress.viewed} / {progress.total} viewed
@@ -41,38 +47,47 @@ export const ReviewTree = ({
 				>
 					<i style={{ width: `${progress.percent}%` }} />
 				</span>
+				<CollapseToggle
+					collapsed={collapsed}
+					label="Changed files"
+					onToggle={toggle}
+				/>
 			</div>
-			<ul className="review-tree__list">
-				{files.map(file => (
-					<li key={file.path} className="review-tree__row">
-						<button
-							type="button"
-							className="review-tree__file"
-							data-viewed={Boolean(viewed[file.path])}
-							aria-current={
-								file.path === selectedPath ? 'true' : undefined
-							}
-							title={file.path}
-							onClick={() => onSelect(file.path)}
-						>
-							<span
-								className="review-tree__badge"
-								data-change={file.change}
+			{!collapsed && (
+				<ul className="review-tree__list">
+					{files.map(file => (
+						<li key={file.path} className="review-tree__row">
+							<button
+								type="button"
+								className="review-tree__file"
+								data-viewed={Boolean(viewed[file.path])}
+								aria-current={
+									file.path === selectedPath
+										? 'true'
+										: undefined
+								}
+								title={file.path}
+								onClick={() => onSelect(file.path)}
 							>
-								{CHANGE_BADGE[file.change]}
-							</span>
-							<span className="review-tree__name">
-								{fileName(file.path)}
-							</span>
-							<DiffStat
-								add={file.additions}
-								del={file.deletions}
-							/>
-						</button>
-						<ViewedCheck path={file.path} />
-					</li>
-				))}
-			</ul>
+								<span
+									className="review-tree__badge"
+									data-change={file.change}
+								>
+									{CHANGE_BADGE[file.change]}
+								</span>
+								<span className="review-tree__name">
+									{fileName(file.path)}
+								</span>
+								<DiffStat
+									add={file.additions}
+									del={file.deletions}
+								/>
+							</button>
+							<ViewedCheck path={file.path} />
+						</li>
+					))}
+				</ul>
+			)}
 		</nav>
 	)
 }

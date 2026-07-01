@@ -178,6 +178,7 @@ describe('ReviewView', () => {
 	let root: Root
 
 	beforeEach(() => {
+		localStorage.clear()
 		store.set(sessionsAtom, {})
 		store.set(cellFramesAtom, {})
 		store.set(viewedFilesAtom, {})
@@ -278,6 +279,43 @@ describe('ReviewView', () => {
 		const body = container.querySelector('.review__body.stagger')
 		expect(body).not.toBeNull()
 		expect(body?.querySelectorAll(':scope > .panel')).toHaveLength(3)
+	})
+
+	const collapseToggleIn = (selector: string): HTMLButtonElement | null =>
+		container.querySelector<HTMLButtonElement>(
+			`${selector} .panel-collapse`,
+		)
+
+	it('folds the file tree away when its dock is collapsed', async () => {
+		await render()
+
+		expect(container.querySelector('.review-tree__list')).not.toBeNull()
+		await act(async () => {
+			collapseToggleIn('.review-tree')?.click()
+		})
+
+		expect(container.querySelector('.review-tree__list')).toBeNull()
+		expect(
+			container
+				.querySelector('.review-tree')
+				?.getAttribute('data-collapsed'),
+		).toBe('true')
+	})
+
+	it('folds the conversation rail away when its dock is collapsed', async () => {
+		await render()
+
+		expect(container.querySelector('.review-rail__compose')).not.toBeNull()
+		await act(async () => {
+			collapseToggleIn('.review-rail')?.click()
+		})
+
+		expect(container.querySelector('.review-rail__compose')).toBeNull()
+		expect(
+			container
+				.querySelector('.review-rail')
+				?.getAttribute('data-collapsed'),
+		).toBe('true')
 	})
 
 	it('viewed check buttons advance the progress bar', async () => {

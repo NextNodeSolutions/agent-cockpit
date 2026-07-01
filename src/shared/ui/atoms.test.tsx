@@ -3,7 +3,14 @@ import { createRoot } from 'react-dom/client'
 import type { Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { DiffStat, Panel, PanelHead, SDot, StatusTag } from './atoms'
+import {
+	CollapseToggle,
+	DiffStat,
+	Panel,
+	PanelHead,
+	SDot,
+	StatusTag,
+} from './atoms'
 
 describe('atoms', () => {
 	let container: HTMLDivElement
@@ -136,6 +143,102 @@ describe('atoms', () => {
 			expect(grip?.getAttribute('title')).toBe('Drag to rearrange module')
 			expect(grip?.getAttribute('aria-hidden')).toBe('true')
 			expect(grip?.querySelectorAll('i')).toHaveLength(6)
+		})
+
+		it('has no collapse control without a toggle handler', () => {
+			render(<PanelHead title="Sessions" />)
+
+			expect(container.querySelector('.panel-collapse')).toBeNull()
+		})
+
+		it('hosts a collapse control when given a toggle handler', () => {
+			render(
+				<PanelHead
+					title="Sessions"
+					collapsed={false}
+					onToggleCollapse={() => {}}
+				/>,
+			)
+
+			const toggle = container.querySelector('.panel-collapse')
+			expect(toggle?.getAttribute('aria-expanded')).toBe('true')
+			expect(toggle?.getAttribute('aria-label')).toBe('Collapse Sessions')
+		})
+	})
+
+	describe('CollapseToggle', () => {
+		it('reads as expanded when the panel is open', () => {
+			render(
+				<CollapseToggle
+					collapsed={false}
+					label="Diffs"
+					onToggle={() => {}}
+				/>,
+			)
+
+			const button = container.querySelector('button.panel-collapse')
+			expect(button?.getAttribute('aria-expanded')).toBe('true')
+			expect(button?.getAttribute('aria-label')).toBe('Collapse Diffs')
+		})
+
+		it('reads as collapsed and offers to expand when folded', () => {
+			render(
+				<CollapseToggle
+					collapsed={true}
+					label="Diffs"
+					onToggle={() => {}}
+				/>,
+			)
+
+			const button = container.querySelector('button.panel-collapse')
+			expect(button?.getAttribute('aria-expanded')).toBe('false')
+			expect(button?.getAttribute('aria-label')).toBe('Expand Diffs')
+		})
+
+		it('fires the toggle on click', () => {
+			let clicks = 0
+			render(
+				<CollapseToggle
+					collapsed={false}
+					label="Diffs"
+					onToggle={() => {
+						clicks += 1
+					}}
+				/>,
+			)
+
+			const button = container.querySelector<HTMLButtonElement>(
+				'button.panel-collapse',
+			)
+			act(() => {
+				button?.click()
+			})
+
+			expect(clicks).toBe(1)
+		})
+	})
+
+	describe('Panel collapse state', () => {
+		it('marks the surface collapsed when folded', () => {
+			render(
+				<Panel className="fc-sess" collapsed={true}>
+					<p>body</p>
+				</Panel>,
+			)
+
+			const panel = container.querySelector('section.panel.fc-sess')
+			expect(panel?.getAttribute('data-collapsed')).toBe('true')
+		})
+
+		it('leaves the attribute off when collapse is not managed', () => {
+			render(
+				<Panel className="fc-sess">
+					<p>body</p>
+				</Panel>,
+			)
+
+			const panel = container.querySelector('section.panel.fc-sess')
+			expect(panel?.hasAttribute('data-collapsed')).toBe(false)
 		})
 	})
 })

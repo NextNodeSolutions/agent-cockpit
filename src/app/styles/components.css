@@ -817,6 +817,47 @@ button {
 	opacity: 1 !important;
 }
 
+/* ---- collapse control (peripheral docks fold to a thin band) ---- */
+.panel-collapse {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	padding: 0;
+	border: none;
+	border-radius: var(--r-sm);
+	background: none;
+	color: var(--text-3);
+	cursor: pointer;
+	transition:
+		color var(--t-fast),
+		background var(--t-fast);
+}
+.panel-collapse:hover {
+	color: var(--text-2);
+	background: var(--surface-2);
+}
+.panel-chev {
+	font-size: 10px;
+	line-height: 1;
+	transition: transform var(--t-fast);
+}
+/* Folded: the chevron points right, inviting a click to re-open in place. */
+.panel-chev[data-collapsed='true'] {
+	transform: rotate(-90deg);
+}
+/* A collapsed dock keeps only its head as a narrow strip: title, count and
+   actions fall away, leaving the chevron as the re-open handle. */
+.panel[data-collapsed='true'] .panel-head {
+	justify-content: center;
+	padding-left: 0;
+	padding-right: 0;
+}
+.panel[data-collapsed='true'] .panel-head > :not(.panel-collapse) {
+	display: none;
+}
+
 /* ---- terminal ---- */
 .term {
 	background: var(--term-bg);

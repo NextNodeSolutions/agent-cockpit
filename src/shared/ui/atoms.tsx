@@ -49,20 +49,57 @@ export const DiffStat = ({
 	</span>
 )
 
+type CollapseToggleProps = {
+	collapsed: boolean
+	/** Panel title, spoken in the control's accessible name. */
+	label: string
+	onToggle: () => void
+}
+
+// The disclosure control every peripheral dock shares: a chevron that folds
+// the panel to a thin band and back. The block's collapse state is owned by
+// usePanelCollapse; this only renders it and reports the click.
+export const CollapseToggle = ({
+	collapsed,
+	label,
+	onToggle,
+}: CollapseToggleProps): React.JSX.Element => (
+	<button
+		type="button"
+		className="panel-collapse"
+		aria-expanded={!collapsed}
+		aria-label={`${collapsed ? 'Expand' : 'Collapse'} ${label}`}
+		onClick={onToggle}
+	>
+		<span
+			className="panel-chev"
+			data-collapsed={collapsed ? 'true' : 'false'}
+			aria-hidden="true"
+		>
+			▾
+		</span>
+	</button>
+)
+
 type PanelProps = {
 	className?: string
 	style?: React.CSSProperties
+	/** Managed by the owner when the panel is a collapsible dock; drives the
+	 *  thin-band styling via data-collapsed. Left off for static panels. */
+	collapsed?: boolean
 	children: React.ReactNode
 }
 
 export const Panel = ({
 	className,
 	style,
+	collapsed,
 	children,
 }: PanelProps): React.JSX.Element => (
 	<section
 		className={className === undefined ? 'panel' : `panel ${className}`}
 		style={style}
+		data-collapsed={collapsed === undefined ? undefined : String(collapsed)}
 	>
 		{children}
 	</section>
@@ -71,6 +108,10 @@ export const Panel = ({
 type PanelHeadProps = {
 	title: string
 	count?: number | string
+	/** Present together to make the panel a collapsible dock; the chevron sits
+	 *  at the head's trailing edge and folds the block to a thin band. */
+	collapsed?: boolean
+	onToggleCollapse?: () => void
 	children?: React.ReactNode
 }
 
@@ -79,6 +120,8 @@ type PanelHeadProps = {
 export const PanelHead = ({
 	title,
 	count,
+	collapsed,
+	onToggleCollapse,
 	children,
 }: PanelHeadProps): React.JSX.Element => (
 	<header className="panel-head">
@@ -98,5 +141,12 @@ export const PanelHead = ({
 		{count !== undefined && <span className="ph-count">{count}</span>}
 		<span className="mz-spacer" />
 		{children}
+		{onToggleCollapse !== undefined && (
+			<CollapseToggle
+				collapsed={collapsed ?? false}
+				label={title}
+				onToggle={onToggleCollapse}
+			/>
+		)}
 	</header>
 )

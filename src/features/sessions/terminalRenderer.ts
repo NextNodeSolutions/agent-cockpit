@@ -595,9 +595,9 @@ export const gridForSize = (
 // already match it leaves the bitmap untouched, because assigning canvas.width
 // always clears the canvas — even to the same value. Callers paint immediately
 // after, so the clear that a genuine resize triggers is never seen. Display
-// (CSS) sizing is intentionally NOT done here: during a live resize the element
-// is stretched over the old bitmap as a hold-frame, and the backing store only
-// catches up once a freshly reflowed frame is ready to paint crisply.
+// (CSS) sizing is intentionally NOT done here: the resize handler owns the
+// element size and repaints through this sync, so element and bitmap move
+// together (useTerminalCanvas.onResize).
 export const syncBackingStore = (
 	canvas: HTMLCanvasElement,
 	context: CanvasRenderingContext2D,

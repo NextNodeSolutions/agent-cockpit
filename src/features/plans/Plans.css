@@ -16,7 +16,8 @@
 	padding: var(--sp-gap) var(--sp-panel) var(--sp-panel);
 }
 .pl-list-panel {
-	width: 262px;
+	--panel-w: 262px;
+	width: var(--panel-w);
 }
 .pl-list-panel[data-collapsed='true'] {
 	width: var(--panel-band);

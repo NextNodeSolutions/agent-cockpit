@@ -143,7 +143,7 @@ describe('PlansView', () => {
 		)
 	})
 
-	it('folds the plans list away when its dock is collapsed', async () => {
+	it('folds the plans list to a summary band when its dock is collapsed', async () => {
 		await render()
 
 		expect(container.querySelector('.pl-list-panel a')).not.toBeNull()
@@ -154,12 +154,17 @@ describe('PlansView', () => {
 			toggle?.click()
 		})
 
-		expect(container.querySelector('.pl-list-panel a')).toBeNull()
 		expect(
 			container
 				.querySelector('.pl-list-panel')
 				?.getAttribute('data-collapsed'),
 		).toBe('true')
+		// The folded band carries the plan/interview tally in place of the list.
+		expect(
+			container.querySelectorAll(
+				'.pl-list-panel .panel-fold .panel-fold__count',
+			),
+		).toHaveLength(2)
 	})
 
 	it('toasts that new interviews come from the agent workflow', async () => {

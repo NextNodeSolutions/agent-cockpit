@@ -769,10 +769,13 @@ button {
 	min-width: 0;
 	min-height: 0;
 	position: relative;
+	/* width transitions only fire for the fixed-width docks (an explicit px→px
+	   change); grid-sized panels keep width:auto, so this is inert for them. */
 	transition:
 		box-shadow var(--t-med),
 		background var(--t-med),
-		border-color var(--t-med);
+		border-color var(--t-med),
+		width var(--t-med) var(--ease-out);
 }
 .panel-head {
 	display: flex;
@@ -817,45 +820,187 @@ button {
 	opacity: 1 !important;
 }
 
-/* ---- collapse control (peripheral docks fold to a thin band) ---- */
+/* ============================================================
+   Collapse: a peripheral dock folds to a thin band. The band's width
+   animates (see .panel's width transition); .panel-main cross-fades and
+   clips as the dock narrows, and .panel-fold cross-fades in as the summary.
+   ============================================================ */
+
+/* The head's disclosure control — a chevron button that folds the dock. */
 .panel-collapse {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	width: 22px;
-	height: 22px;
+	width: 26px;
+	height: 26px;
 	padding: 0;
-	border: none;
+	border: 1px solid transparent;
 	border-radius: var(--r-sm);
 	background: none;
 	color: var(--text-3);
 	cursor: pointer;
 	transition:
 		color var(--t-fast),
-		background var(--t-fast);
+		background var(--t-fast),
+		border-color var(--t-fast),
+		transform var(--t-fast);
 }
 .panel-collapse:hover {
-	color: var(--text-2);
+	color: var(--text);
 	background: var(--surface-2);
+	border-color: var(--border);
+}
+.panel-collapse:active {
+	transform: scale(0.9);
 }
 .panel-chev {
+	display: inline-flex;
+	transition: transform var(--t-med) var(--ease-spring);
+}
+.panel-chev svg {
+	width: 15px;
+	height: 15px;
+}
+.panel-chev[data-point='left'] {
+	transform: rotate(180deg);
+}
+
+/* Expanded content. Its min-width pins the open layout, so as the dock narrows
+   the content is clipped by the panel's overflow instead of reflowing; the
+   fade hides the clipped edge. */
+.panel-main {
+	flex: 1;
+	min-height: 0;
+	min-width: var(--panel-w);
+	display: flex;
+	flex-direction: column;
+	transition: opacity var(--t-med) var(--ease-out);
+}
+.panel[data-collapsed='true'] .panel-main {
+	opacity: 0;
+	pointer-events: none;
+}
+
+/* The folded band: whole strip re-opens the dock and carries the summary. */
+.panel-fold {
+	position: absolute;
+	inset: 0;
+	z-index: 2;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 11px;
+	padding: 10px 0;
+	border: 0;
+	border-radius: inherit;
+	background: transparent;
+	color: var(--text-3);
+	cursor: pointer;
+	opacity: 0;
+	pointer-events: none;
+	transition:
+		opacity var(--t-med) var(--ease-out),
+		background var(--t-fast);
+}
+/* Fade the summary in a beat after the fold starts, so the two layers don't
+   both sit at full opacity mid-transition. */
+.panel[data-collapsed='true'] .panel-fold {
+	opacity: 1;
+	pointer-events: auto;
+	transition-delay: 0.05s, 0s;
+}
+.panel-fold:hover {
+	background: var(--fill-hover);
+}
+.panel-fold__chev {
+	display: inline-flex;
+	flex: none;
+	color: var(--text-3);
+	transition:
+		transform var(--t-med) var(--ease-spring),
+		color var(--t-fast);
+}
+.panel-fold:hover .panel-fold__chev {
+	color: var(--accent);
+}
+.panel-fold__chev svg {
+	width: 16px;
+	height: 16px;
+}
+.panel-fold__chev[data-point='left'] {
+	transform: rotate(180deg);
+}
+/* The summary sits at the top, right under the chevron; the title label reads
+   down the rest of the band. */
+.panel-fold__meta {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 7px;
+	flex: none;
+}
+.panel-fold__title {
+	writing-mode: vertical-rl;
+	text-orientation: mixed;
+	font-size: var(--fs-xs);
+	font-weight: 650;
+	letter-spacing: 0.02em;
+	color: var(--text-2);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	min-height: 0;
+	margin-top: auto;
+}
+.panel-fold__count {
+	font-family: var(--font-mono);
 	font-size: 10px;
+	font-weight: 600;
 	line-height: 1;
-	transition: transform var(--t-fast);
+	color: var(--text-2);
+	background: var(--surface-2);
+	border: 1px solid var(--border);
+	border-radius: 20px;
+	padding: 3px 6px;
 }
-/* Folded: the chevron points right, inviting a click to re-open in place. */
-.panel-chev[data-collapsed='true'] {
-	transform: rotate(-90deg);
+.panel-fold__count[data-accent='true'] {
+	color: var(--accent);
+	background: var(--fill-accent);
+	border-color: color-mix(in srgb, var(--accent) 28%, transparent);
 }
-/* A collapsed dock keeps only its head as a narrow strip: title, count and
-   actions fall away, leaving the chevron as the re-open handle. */
-.panel[data-collapsed='true'] .panel-head {
-	justify-content: center;
-	padding-left: 0;
-	padding-right: 0;
+.panel-fold__stat {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 1px;
+	font-family: var(--font-mono);
+	font-size: 10px;
+	line-height: 1.2;
+	white-space: nowrap;
 }
-.panel[data-collapsed='true'] .panel-head > :not(.panel-collapse) {
-	display: none;
+.panel-fold__stat .add {
+	color: var(--c-add);
+}
+.panel-fold__stat .del {
+	color: var(--c-del);
+}
+/* Vertical mini progress bar (fills from the bottom). */
+.panel-fold__vbar {
+	width: 5px;
+	height: 44px;
+	border-radius: 5px;
+	background: var(--fill-hover);
+	overflow: hidden;
+	display: flex;
+	flex-direction: column-reverse;
+	flex: none;
+}
+.panel-fold__vbar i {
+	display: block;
+	width: 100%;
+	background: linear-gradient(0deg, var(--accent), var(--accent-2));
+	border-radius: 5px;
+	transition: height var(--t-slow) var(--ease-out);
 }
 
 /* ---- terminal ---- */
@@ -1191,6 +1336,15 @@ html[data-theme='latte'] .toast[data-show] {
 	.sdot-input,
 	.caret {
 		animation: none !important;
+	}
+	/* Fold instantly: keep the collapse readable without width/fade motion. */
+	.panel,
+	.panel-main,
+	.panel-fold,
+	.panel-chev,
+	.panel-fold__chev,
+	.panel-fold__vbar i {
+		transition: none !important;
 	}
 }
 

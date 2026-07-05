@@ -99,3 +99,11 @@ export const IconX = (): React.JSX.Element => (
 		<line x1="13" y1="5" x2="5" y2="13" />
 	</IconCanvas>
 )
+
+// Points right at rest; consumers rotate it (CSS transform) to face the fold
+// direction, so one glyph drives every collapse affordance.
+export const IconChevron = (): React.JSX.Element => (
+	<IconCanvas>
+		<polyline points="6.5,3.5 12,9 6.5,14.5" />
+	</IconCanvas>
+)

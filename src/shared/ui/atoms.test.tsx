@@ -4,8 +4,10 @@ import type { Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import {
+	CollapsedRail,
 	CollapseToggle,
 	DiffStat,
+	DockShell,
 	Panel,
 	PanelHead,
 	SDot,
@@ -215,6 +217,113 @@ describe('atoms', () => {
 			})
 
 			expect(clicks).toBe(1)
+		})
+	})
+
+	describe('CollapsedRail', () => {
+		it('re-opens the dock when the whole band is clicked', () => {
+			let expands = 0
+			render(
+				<CollapsedRail
+					title="Sessions"
+					side="left"
+					collapsed={true}
+					onExpand={() => {
+						expands += 1
+					}}
+				>
+					<span className="panel-fold__count">3</span>
+				</CollapsedRail>,
+			)
+
+			const band =
+				container.querySelector<HTMLButtonElement>('button.panel-fold')
+			expect(band?.getAttribute('aria-label')).toBe('Expand Sessions')
+			expect(band?.querySelector('.panel-fold__count')?.textContent).toBe(
+				'3',
+			)
+			act(() => {
+				band?.click()
+			})
+			expect(expands).toBe(1)
+		})
+
+		it('leaves the tab order and a11y tree while the dock is open', () => {
+			render(
+				<CollapsedRail
+					title="Diffs"
+					side="right"
+					collapsed={false}
+					onExpand={() => {}}
+				>
+					<span className="panel-fold__count">0</span>
+				</CollapsedRail>,
+			)
+
+			const band = container.querySelector('button.panel-fold')
+			expect(band?.getAttribute('aria-hidden')).toBe('true')
+			expect(band?.hasAttribute('inert')).toBe(true)
+		})
+
+		it('points its chevron out toward the fold edge', () => {
+			render(
+				<CollapsedRail
+					title="Diffs"
+					side="right"
+					collapsed={true}
+					onExpand={() => {}}
+				>
+					<span />
+				</CollapsedRail>,
+			)
+
+			expect(
+				container
+					.querySelector('.panel-fold__chev')
+					?.getAttribute('data-point'),
+			).toBe('left')
+		})
+	})
+
+	describe('DockShell', () => {
+		it('wraps the content and hosts the folded summary', () => {
+			render(
+				<DockShell
+					title="Sessions"
+					side="left"
+					collapsed={false}
+					onExpand={() => {}}
+					fold={<span className="panel-fold__count">2</span>}
+				>
+					<p className="body">rows</p>
+				</DockShell>,
+			)
+
+			const main = container.querySelector('.panel-main')
+			expect(main?.querySelector('.body')?.textContent).toBe('rows')
+			expect(main?.hasAttribute('inert')).toBe(false)
+			expect(
+				container.querySelector('.panel-fold .panel-fold__count')
+					?.textContent,
+			).toBe('2')
+		})
+
+		it('makes the open content inert once folded', () => {
+			render(
+				<DockShell
+					title="Sessions"
+					side="left"
+					collapsed={true}
+					onExpand={() => {}}
+					fold={<span />}
+				>
+					<p className="body">rows</p>
+				</DockShell>,
+			)
+
+			expect(
+				container.querySelector('.panel-main')?.hasAttribute('inert'),
+			).toBe(true)
 		})
 	})
 

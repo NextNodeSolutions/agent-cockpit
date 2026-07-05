@@ -146,15 +146,14 @@ const propagateResize = (
 }
 
 // One effect owns the whole canvas lifecycle for a session: context, metrics,
-// the cell-frame listener, and the resize observer. Resize and paint are kept
-// separate on purpose:
-//
-//   - A resize tick only stretches the canvas ELEMENT (CSS) over the current
-//     bitmap and asks the backend to reflow. The browser scales the last frame
-//     to fill — a hold-frame, exactly what a GPU terminal does — so there is no
-//     blank flash and no stale-width redraw mid-drag.
-//   - The crisp BACKING-STORE resize happens only when the reflowed frame lands
-//     (drawFrame paints it immediately, so the resize clear is never seen).
+// the cell-frame listener, and the resize observer. A resize tick repaints the
+// LAST frame immediately at the new size — crisp cells, top-left anchored, the
+// freed space filled with the terminal background — and asks the backend to
+// reflow. Letting CSS stretch the old bitmap instead (the previous hold-frame
+// approach) distorted the whole pane for the duration of a drag: on macOS the
+// webview's event queue is starved during a live window resize, so the
+// reflowed frame that was supposed to replace the stretch only landed after
+// the drag ended.
 //
 // A mouse-report DTO for the backend, built from a cell + the raw event. Pure
 // (captures nothing), so it lives at module scope.
@@ -333,10 +332,12 @@ const startRendering = (
 	const onResize = (width: number, height: number): void => {
 		cssWidth = width
 		cssHeight = height
-		// Hold-frame: stretch the element over the existing bitmap. The backing
-		// store stays put until the next frame repaints it crisply.
 		canvas.style.width = `${width}px`
 		canvas.style.height = `${height}px`
+		// Repaint the current frame at the new size right away: the old grid
+		// stays crisp while the backend reflow is in flight (or, mid-drag on
+		// macOS, until the event queue drains at the end of the gesture).
+		paint()
 
 		const { cols, rows } = gridForSize(width, height, metrics)
 		if (lastGrid && lastGrid.cols === cols && lastGrid.rows === rows) return
@@ -345,9 +346,9 @@ const startRendering = (
 	}
 
 	// A delta change re-derives the sized pieces in place, then reflows: the
-	// grid math reruns against the new metrics (onResize dedupes and notifies
-	// the backend when cols/rows actually move) and the current frame repaints
-	// at the new size. Interaction state is untouched.
+	// grid math reruns against the new metrics, onResize dedupes, notifies
+	// the backend when cols/rows actually move, and repaints the current
+	// frame at the new size. Interaction state is untouched.
 	const onFontSizeDelta = (): void => {
 		const delta = store.get(fontSizeDeltaAtom)
 		if (delta === appliedDelta) return
@@ -358,7 +359,6 @@ const startRendering = (
 		fontTable = sized.fontTable
 		config.font = font
 		onResize(cssWidth, cssHeight)
-		paint()
 	}
 
 	const unsubscribeFontSize = store.sub(fontSizeDeltaAtom, onFontSizeDelta)

@@ -222,7 +222,7 @@ describe('DiffPanel dock', () => {
 	const collapseToggle = (): HTMLButtonElement | null =>
 		container.querySelector<HTMLButtonElement>('.fc-diffs .panel-collapse')
 
-	it('folds the diff body away when the dock is collapsed', async () => {
+	it('folds the diff dock to a summary band when the dock is collapsed', async () => {
 		invokeMock.mockResolvedValue({ patch: TWO_FILE_PATCH })
 		await mount()
 
@@ -231,13 +231,16 @@ describe('DiffPanel dock', () => {
 			collapseToggle()?.click()
 		})
 
-		expect(container.querySelector('.fc-dfiles')).toBeNull()
-		expect(container.querySelector('.fc-dhunk')).toBeNull()
 		expect(
 			container
 				.querySelector('.fc-diffs')
 				?.getAttribute('data-collapsed'),
 		).toBe('true')
+		// The band carries the changed-file tally in place of the file list.
+		expect(
+			container.querySelector('.fc-diffs .panel-fold .panel-fold__count')
+				?.textContent,
+		).toBe('2')
 	})
 
 	it('idles without a repository', async () => {

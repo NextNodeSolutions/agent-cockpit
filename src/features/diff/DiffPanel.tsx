@@ -1,8 +1,12 @@
 import { useMemo, useState } from 'react'
 
 import { navigate, reviewHref } from '@/app/router'
-import { reviewFilesFromParsed } from '@/features/review/reviewFiles'
-import { PanelHead } from '@/shared/ui/atoms'
+import type { DiffTotals } from '@/features/review/reviewFiles'
+import {
+	diffTotals,
+	reviewFilesFromParsed,
+} from '@/features/review/reviewFiles'
+import { DockShell, PanelHead } from '@/shared/ui/atoms'
 import { usePanelCollapse } from '@/shared/usePanelCollapse'
 
 import { DiffPanelBody } from './DiffPanelBody'
@@ -10,6 +14,25 @@ import { DiffPanelFiles } from './DiffPanelFiles'
 import { DiffPanelPreview } from './DiffPanelPreview'
 import { useDiff } from './useDiff'
 import { usePatchFiles } from './usePatchFiles'
+
+type FoldProps = {
+	totals: DiffTotals
+}
+
+// The folded band's summary: the changed-file tally over its +/− totals.
+const DiffsFold = ({ totals }: FoldProps): React.JSX.Element => (
+	<>
+		<span className="panel-fold__count" data-accent={totals.files > 0}>
+			{totals.files}
+		</span>
+		{(totals.additions > 0 || totals.deletions > 0) && (
+			<span className="panel-fold__stat">
+				<span className="add">+{totals.additions}</span>{' '}
+				<span className="del">−{totals.deletions}</span>
+			</span>
+		)}
+	</>
+)
 
 type Props = {
 	repoPath: string | null
@@ -32,6 +55,7 @@ export const DiffPanel = ({ repoPath }: Props): React.JSX.Element => {
 	const [selectedPath, setSelectedPath] = useState<string | null>(null)
 	const { collapsed, toggle } = usePanelCollapse('cockpit.diffs')
 
+	const totals = diffTotals(files)
 	const selected =
 		files.find(file => file.path === selectedPath) ?? files[0] ?? null
 	// Selection and the FileDiff `key` both index by `FileDiffMetadata.name`,
@@ -58,21 +82,28 @@ export const DiffPanel = ({ repoPath }: Props): React.JSX.Element => {
 			aria-label="Diffs"
 			data-collapsed={String(collapsed)}
 		>
-			<PanelHead
+			<DockShell
 				title="Diffs"
-				count={`${files.length} files`}
+				side="right"
 				collapsed={collapsed}
-				onToggleCollapse={toggle}
+				onExpand={toggle}
+				fold={<DiffsFold totals={totals} />}
 			>
-				<button
-					type="button"
-					className="btn btn-sm btn-outline"
-					onClick={() => navigate(reviewHref(selected?.path))}
+				<PanelHead
+					title="Diffs"
+					count={`${files.length} files`}
+					collapsed={collapsed}
+					collapseSide="right"
+					onToggleCollapse={toggle}
 				>
-					Open review ↗
-				</button>
-			</PanelHead>
-			{!collapsed && (
+					<button
+						type="button"
+						className="btn btn-sm btn-outline"
+						onClick={() => navigate(reviewHref(selected?.path))}
+					>
+						Open review ↗
+					</button>
+				</PanelHead>
 				<DiffPanelBody state={state}>
 					<DiffPanelFiles
 						files={files}
@@ -88,7 +119,7 @@ export const DiffPanel = ({ repoPath }: Props): React.JSX.Element => {
 						)}
 					</div>
 				</DiffPanelBody>
-			)}
+			</DockShell>
 		</aside>
 	)
 }

@@ -58,7 +58,6 @@ export const CommandPalette = ({
 
 	usePaletteKeyboard({
 		open,
-		openPalette: () => setOpen(true),
 		close,
 		focusInput: () => inputRef.current?.focus(),
 		moveSelection: step =>

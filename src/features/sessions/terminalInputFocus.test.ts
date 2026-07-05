@@ -38,7 +38,7 @@ describe('terminal input router focus reclaim', () => {
 		await flushFocusSync()
 		expect(document.activeElement).toBe(field)
 
-		// A keyboard-only dismissal (palette Escape, ⌘K toggle) blurs the field
+		// A keyboard-only dismissal (palette Escape) blurs the field
 		// without any click or window refocus — the composer must still adopt
 		// focus so dead-key/IME input keeps flowing to the terminal.
 		field.blur()

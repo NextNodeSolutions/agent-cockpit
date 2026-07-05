@@ -39,7 +39,6 @@ export const TopBar = ({
 		<span className="mz-spacer" />
 		<button type="button" className="mz-cmdk" onClick={openPalette}>
 			<span>Jump to…</span>
-			<span className="mz-kbd">⌘K</span>
 		</button>
 		{activeProjectPath !== null && (
 			<SplitNew repoPath={activeProjectPath} />

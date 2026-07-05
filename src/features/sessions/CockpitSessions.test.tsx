@@ -162,13 +162,12 @@ describe('CockpitSessions', () => {
 		expect(metas).toEqual(['mizraj · 0s'])
 	})
 
-	it('hints the global palette shortcut in the panel foot', () => {
+	it('points at the top bar Jump button in the panel foot', () => {
 		seed('run-1')
 		render('run-1')
 
 		const foot = container.querySelector('.fc-sess-foot')
-		expect(foot?.querySelector('.mz-kbd')?.textContent).toBe('⌘K')
-		expect(foot?.textContent).toContain('jump between agents')
+		expect(foot?.textContent).toContain('Jump to…')
 	})
 
 	it('hides the new-session button without an active project', () => {

@@ -33,8 +33,7 @@ const isEditableTarget = (): boolean => {
  * (both derive from shellViews, so the chord upper bound and the targets can
  * never drift). Registered at the window's CAPTURE phase with the chord fully
  * claimed (preventDefault + stopPropagation) so the terminal's own key router —
- * and any Ghostty binding — never sees a handled chord, same rationale as the
- * palette's ⌘K.
+ * and any Ghostty binding — never sees a handled chord.
  */
 export const useShellShortcuts = (): void => {
 	const cockpitHref = useCockpitTargetHref()

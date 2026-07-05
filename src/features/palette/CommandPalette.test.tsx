@@ -79,9 +79,11 @@ describe('CommandPalette', () => {
 
 	const palette = (): Element | null => container.querySelector('.palette')
 
+	// ⌘K is deliberately not a palette chord anymore (it belongs to the
+	// terminal); the palette is summoned the way the top bar button does it.
 	const open = async (): Promise<void> => {
 		await act(async () => {
-			pressGlobal({ key: 'k', metaKey: true })
+			store.set(paletteOpenAtom, true)
 		})
 	}
 
@@ -107,7 +109,7 @@ describe('CommandPalette', () => {
 		).toBe('false')
 	})
 
-	it('opens on cmd+K, claims the shortcut and focuses the input', async () => {
+	it('leaves cmd+K to the terminal and stays closed', async () => {
 		await render()
 
 		let event: KeyboardEvent | undefined
@@ -115,8 +117,15 @@ describe('CommandPalette', () => {
 			event = pressGlobal({ key: 'k', metaKey: true })
 		})
 
+		expect(palette()?.getAttribute('data-open')).toBe('false')
+		expect(event?.defaultPrevented).toBe(false)
+	})
+
+	it('focuses the input when summoned', async () => {
+		await render()
+		await open()
+
 		expect(palette()?.getAttribute('data-open')).toBe('true')
-		expect(event?.defaultPrevented).toBe(true)
 		expect(document.activeElement).toBe(
 			container.querySelector('.palette input'),
 		)
@@ -258,16 +267,18 @@ describe('CommandPalette', () => {
 		expect(items[2]?.getAttribute('data-on')).toBe('false')
 	})
 
-	it('a second cmd+K closes the open palette', async () => {
+	it('ignores cmd+K even while open', async () => {
 		await render()
 		await open()
 		expect(palette()?.getAttribute('data-open')).toBe('true')
 
+		let event: KeyboardEvent | undefined
 		await act(async () => {
-			pressGlobal({ key: 'k', metaKey: true })
+			event = pressGlobal({ key: 'k', metaKey: true })
 		})
 
-		expect(palette()?.getAttribute('data-open')).toBe('false')
+		expect(palette()?.getAttribute('data-open')).toBe('true')
+		expect(event?.defaultPrevented).toBe(false)
 	})
 
 	it('points aria-activedescendant at the highlighted option', async () => {

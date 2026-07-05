@@ -402,7 +402,7 @@ export const startTerminalInputRouter = (): void => {
 	window.addEventListener('focus', focusSync.syncSoon)
 	document.addEventListener('click', focusSync.syncSoon)
 	// Document-level so ANY field handing focus back to the body returns the
-	// keyboard to the terminal — the palette's Escape/⌘K close and other
+	// keyboard to the terminal — the palette's Escape close and other
 	// keyboard-only dismissals never produce a click or window refocus.
 	document.addEventListener('focusout', focusSync.syncSoon)
 	const unsubActiveSession = store.sub(

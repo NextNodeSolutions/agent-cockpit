@@ -189,8 +189,7 @@ export const CockpitSessions = ({
 					))}
 				</nav>
 				<div className="fc-sess-foot">
-					<span className="mz-kbd">⌘K</span>
-					<span>jump between agents</span>
+					<span>Jump to… (top bar) switches agents</span>
 				</div>
 			</DockShell>
 		</Panel>

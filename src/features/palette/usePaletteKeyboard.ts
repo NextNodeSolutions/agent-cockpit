@@ -1,13 +1,8 @@
 import { useEffect, useRef } from 'react'
 
-const isToggleChord = (event: KeyboardEvent): boolean =>
-	(event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k'
-
 type PaletteKeyboard = {
 	open: boolean
-	/** Summon the palette (⌘K while closed). */
-	openPalette: () => void
-	/** Dismiss the palette (⌘K while open, or Escape). */
+	/** Dismiss the palette (Escape or the backdrop click). */
 	close: () => void
 	/** Tab is trapped: focus returns to the search input. */
 	focusInput: () => void
@@ -19,9 +14,13 @@ type PaletteKeyboard = {
 
 /**
  * The palette's keyboard routing, owned at the window's capture phase so the
- * terminal's own key router (and any Ghostty ⌘K binding) never sees a handled
- * chord. The listener binds once; it delegates to the latest deps through a ref
- * so it isn't re-bound on every render. The caller owns state and rendering.
+ * terminal's own key router never sees a handled chord while the dialog is up.
+ * The listener binds once; it delegates to the latest deps through a ref so it
+ * isn't re-bound on every render. The caller owns state and rendering.
+ *
+ * TODO(cmdk): the ⌘K toggle chord is deliberately gone — it shadowed the
+ * terminal's own ⌘K (clear screen). The palette opens from the top bar's Jump
+ * button (`openPalette` in palette.ts) until a non-conflicting chord is picked.
  */
 export const usePaletteKeyboard = (deps: PaletteKeyboard): void => {
 	const depsRef = useRef(deps)
@@ -30,13 +29,6 @@ export const usePaletteKeyboard = (deps: PaletteKeyboard): void => {
 	useEffect(() => {
 		const onKeydown = (event: KeyboardEvent): void => {
 			const current = depsRef.current
-			if (isToggleChord(event)) {
-				event.preventDefault()
-				event.stopPropagation()
-				if (current.open) current.close()
-				else current.openPalette()
-				return
-			}
 			if (!current.open) return
 			if (event.key === 'Escape') {
 				event.preventDefault()

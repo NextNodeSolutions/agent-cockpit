@@ -211,7 +211,7 @@ describe('CockpitSessions', () => {
 	const collapseToggle = (): HTMLButtonElement | null =>
 		container.querySelector<HTMLButtonElement>('.fc-sess .panel-collapse')
 
-	it('folds the session list away when the dock is collapsed', () => {
+	it('folds the session list to a summary band when the dock is collapsed', () => {
 		seed('run-1')
 		seed('run-2')
 		render('run-1')
@@ -221,9 +221,11 @@ describe('CockpitSessions', () => {
 			collapseToggle()?.click()
 		})
 
-		// The dock keeps its head as a band; the rows and foot are unmounted.
-		expect(container.querySelector('nav[aria-label="Sessions"]')).toBeNull()
-		expect(container.querySelector('.fc-sess-foot')).toBeNull()
+		// The band replaces the list with a compact summary: the session tally
+		// over a dot per running agent.
+		const fold = container.querySelector('.fc-sess .panel-fold')
+		expect(fold?.querySelector('.panel-fold__count')?.textContent).toBe('2')
+		expect(fold?.querySelectorAll('.sdot')).toHaveLength(2)
 		expect(collapseToggle()?.getAttribute('aria-expanded')).toBe('false')
 	})
 

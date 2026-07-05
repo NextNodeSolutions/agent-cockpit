@@ -25,14 +25,14 @@
 }
 @media (max-width: 1180px) {
 	.fc-sess {
-		width: 220px;
+		--panel-w: 220px;
 	}
 	.fc-diffs {
 		display: none;
 	}
 }
 
-/* A collapsed dock folds to a thin band; its head stays as the re-open grip. */
+/* A collapsed dock folds to a thin band; the folded summary rail replaces it. */
 .fc-sess[data-collapsed='true'],
 .fc-diffs[data-collapsed='true'] {
 	width: var(--panel-band);
@@ -40,7 +40,8 @@
 
 /* ---- 1. left: sessions panel ---- */
 .fc-sess {
-	width: 248px;
+	--panel-w: 248px;
+	width: var(--panel-w);
 	overflow: hidden;
 }
 .fc-sess .mz-iconbtn {
@@ -129,7 +130,8 @@
 
 /* ---- 3. right: diff dock ---- */
 .fc-diffs {
-	width: 320px;
+	--panel-w: 320px;
+	width: var(--panel-w);
 	overflow: hidden;
 }
 .fc-dfiles {

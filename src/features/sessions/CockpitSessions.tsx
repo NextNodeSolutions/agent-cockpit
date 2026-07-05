@@ -2,7 +2,7 @@ import { useState } from 'react'
 
 import { agentRunHref } from '@/app/router'
 import { formatSessionAge } from '@/features/missionControl/sessionAge'
-import { Panel, PanelHead, SDot } from '@/shared/ui/atoms'
+import { DockShell, Panel, PanelHead, SDot } from '@/shared/ui/atoms'
 import { IconPlus } from '@/shared/ui/icons'
 import { useNow } from '@/shared/useNow'
 import { usePanelCollapse } from '@/shared/usePanelCollapse'
@@ -101,6 +101,33 @@ const SessionRow = ({
 	</a>
 )
 
+// How many status dots the folded band shows before it tallies the rest.
+const FOLD_DOT_LIMIT = 6
+
+type FoldProps = {
+	sessions: ReadonlyArray<SessionState>
+	activityFor: (id: string) => SessionActivity
+}
+
+// The folded band's summary: the session tally over a stack of status dots, so
+// a glance still tells you how many agents run and how they're doing.
+const SessionsFold = ({
+	sessions,
+	activityFor,
+}: FoldProps): React.JSX.Element => (
+	<>
+		<span className="panel-fold__count" data-accent={sessions.length > 0}>
+			{sessions.length}
+		</span>
+		{sessions.slice(0, FOLD_DOT_LIMIT).map(session => (
+			<SDot
+				key={session.id}
+				s={sessionDotKind(activityFor(session.id))}
+			/>
+		))}
+	</>
+)
+
 type Props = {
 	activeSessionId: string
 	activeProjectPath: string | null
@@ -127,36 +154,45 @@ export const CockpitSessions = ({
 
 	return (
 		<Panel className="fc-sess" collapsed={collapsed}>
-			<PanelHead
+			<DockShell
 				title="Sessions"
-				count={repoSessions.length}
+				side="left"
 				collapsed={collapsed}
-				onToggleCollapse={toggle}
+				onExpand={toggle}
+				fold={
+					<SessionsFold
+						sessions={repoSessions}
+						activityFor={activityFor}
+					/>
+				}
 			>
-				{activeProjectPath !== null && (
-					<NewSessionButton repoPath={activeProjectPath} />
-				)}
-			</PanelHead>
-			{!collapsed && (
-				<>
-					<nav className="fc-sess-list" aria-label="Sessions">
-						{repoSessions.map(session => (
-							<SessionRow
-								key={session.id}
-								session={session}
-								active={session.id === activeSessionId}
-								now={now}
-								showRepo={showRepo}
-								activity={activityFor(session.id)}
-							/>
-						))}
-					</nav>
-					<div className="fc-sess-foot">
-						<span className="mz-kbd">⌘K</span>
-						<span>jump between agents</span>
-					</div>
-				</>
-			)}
+				<PanelHead
+					title="Sessions"
+					count={repoSessions.length}
+					collapsed={collapsed}
+					onToggleCollapse={toggle}
+				>
+					{activeProjectPath !== null && (
+						<NewSessionButton repoPath={activeProjectPath} />
+					)}
+				</PanelHead>
+				<nav className="fc-sess-list" aria-label="Sessions">
+					{repoSessions.map(session => (
+						<SessionRow
+							key={session.id}
+							session={session}
+							active={session.id === activeSessionId}
+							now={now}
+							showRepo={showRepo}
+							activity={activityFor(session.id)}
+						/>
+					))}
+				</nav>
+				<div className="fc-sess-foot">
+					<span className="mz-kbd">⌘K</span>
+					<span>jump between agents</span>
+				</div>
+			</DockShell>
 		</Panel>
 	)
 }

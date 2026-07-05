@@ -100,10 +100,12 @@
 	padding: 0 var(--sp-panel) var(--sp-panel);
 }
 .review-tree {
-	width: 260px;
+	--panel-w: 260px;
+	width: var(--panel-w);
 }
 .review-rail {
-	width: 320px;
+	--panel-w: 320px;
+	width: var(--panel-w);
 }
 /* Collapsed docks fold to a thin band; the diff pane widens to fill it. */
 .review-tree[data-collapsed='true'],
@@ -111,24 +113,12 @@
 	width: var(--panel-band);
 }
 /* The rail has no panel-head, so its collapse control rides a small band
-   at the top-right corner, staying reachable when the dock is folded. */
+   at the top-right corner. */
 .review-rail__band {
 	display: flex;
 	justify-content: flex-end;
 	padding: 7px 7px 0;
 	flex: none;
-}
-.review-rail[data-collapsed='true'] .review-rail__band {
-	justify-content: center;
-	padding: 7px 0 0;
-}
-/* Folded tree: the progress row keeps only the chevron as the re-open grip. */
-.review-tree[data-collapsed='true'] .review-tree__progress {
-	justify-content: center;
-	padding: 11px 0 4px;
-}
-.review-tree[data-collapsed='true'] .review-tree__progress > :not(.panel-collapse) {
-	display: none;
 }
 
 /* .stagger (components.css) reads --si per child for the riseIn delay. */
@@ -614,6 +604,10 @@
 @media (max-width: 1180px) {
 	.review__body {
 		grid-template-columns: 230px minmax(0, 1fr);
+	}
+
+	.review-tree {
+		--panel-w: 230px;
 	}
 
 	.review-rail {

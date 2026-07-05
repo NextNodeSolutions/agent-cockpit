@@ -286,7 +286,7 @@ describe('ReviewView', () => {
 			`${selector} .panel-collapse`,
 		)
 
-	it('folds the file tree away when its dock is collapsed', async () => {
+	it('folds the file tree to a summary band when its dock is collapsed', async () => {
 		await render()
 
 		expect(container.querySelector('.review-tree__list')).not.toBeNull()
@@ -294,15 +294,20 @@ describe('ReviewView', () => {
 			collapseToggleIn('.review-tree')?.click()
 		})
 
-		expect(container.querySelector('.review-tree__list')).toBeNull()
 		expect(
 			container
 				.querySelector('.review-tree')
 				?.getAttribute('data-collapsed'),
 		).toBe('true')
+		// The folded band carries the viewed progress in place of the list.
+		expect(
+			container.querySelector(
+				'.review-tree .panel-fold .panel-fold__vbar',
+			),
+		).not.toBeNull()
 	})
 
-	it('folds the conversation rail away when its dock is collapsed', async () => {
+	it('folds the conversation rail to a band when its dock is collapsed', async () => {
 		await render()
 
 		expect(container.querySelector('.review-rail__compose')).not.toBeNull()
@@ -310,12 +315,14 @@ describe('ReviewView', () => {
 			collapseToggleIn('.review-rail')?.click()
 		})
 
-		expect(container.querySelector('.review-rail__compose')).toBeNull()
 		expect(
 			container
 				.querySelector('.review-rail')
 				?.getAttribute('data-collapsed'),
 		).toBe('true')
+		expect(
+			container.querySelector('.review-rail .panel-fold'),
+		).not.toBeNull()
 	})
 
 	it('viewed check buttons advance the progress bar', async () => {

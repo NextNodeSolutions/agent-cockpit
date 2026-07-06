@@ -44,14 +44,6 @@
 	width: var(--panel-w);
 	overflow: hidden;
 }
-.fc-sess .mz-iconbtn {
-	width: 24px;
-	height: 24px;
-}
-.fc-sess .mz-iconbtn svg {
-	width: 12px;
-	height: 12px;
-}
 .fc-sess-list {
 	flex: 1;
 	overflow-y: auto;
@@ -64,7 +56,7 @@
 	text-decoration: none;
 }
 .fc-sess-foot {
-	padding: 9px var(--sp-card);
+	padding: 11px var(--sp-card);
 	border-top: 1px solid var(--border);
 	font-size: var(--fs-xs);
 	color: var(--text-3);
@@ -91,7 +83,8 @@
 	display: flex;
 	align-items: center;
 	gap: 10px;
-	padding: 9px var(--sp-card);
+	min-height: var(--band-h);
+	padding: 0 var(--sp-card);
 	border-bottom: 1px solid var(--term-border);
 	flex: none;
 }
@@ -105,11 +98,15 @@
 	display: inline-flex;
 	align-items: center;
 	gap: 8px;
+	/* Pinned to the control height: unpinned, the inherited 22px root line
+	   box + padding made the pill 32px at every density and pushed the bar
+	   2px past the flanking dock heads. */
+	height: var(--h-control);
 	font-size: var(--fs-mono-sm);
 	color: var(--ctp-text);
 	white-space: nowrap;
 	background: color-mix(in srgb, var(--ctp-surface0) 55%, transparent);
-	padding: 5px 12px;
+	padding: 0 12px;
 	border-radius: var(--r-sm);
 }
 .fc-cwd {

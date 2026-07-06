@@ -39,6 +39,11 @@
 	--sp-card: 8px;
 	--sp-gap: 3px;
 	--h-control: 32px;
+	/* One height for every horizontal header/toolbar band (topbar, panel
+	   heads, the terminal bar, view headers): 52px cozy / 48px compact.
+	   Bands set min-height + zero block padding and center their children,
+	   so side-by-side panels always draw their bottom rules on the same y. */
+	--band-h: calc(var(--h-control) + 20px);
 	--panel-band: 44px; /* width a collapsed peripheral dock folds to */
 	--fs-body: 13.5px;
 	--fs-sm: 12.5px;

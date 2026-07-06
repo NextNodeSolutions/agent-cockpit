@@ -32,15 +32,6 @@
 }
 
 /* ---- list panel ---- */
-.pl-list-panel .panel-head .mz-iconbtn {
-	width: 24px;
-	height: 24px;
-	font-size: 12px;
-}
-.pl-list-panel .panel-head .mz-iconbtn svg {
-	width: 12px;
-	height: 12px;
-}
 .pl-list {
 	flex: 1;
 	overflow-y: auto;

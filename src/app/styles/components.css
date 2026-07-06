@@ -61,7 +61,7 @@ button {
 .mz-app {
 	height: 100vh;
 	display: grid;
-	grid-template-rows: 52px 1fr;
+	grid-template-rows: var(--band-h) 1fr;
 	overflow: hidden;
 }
 .mz-body {
@@ -596,7 +596,8 @@ button {
 	display: flex;
 	align-items: center;
 	gap: 12px;
-	padding: calc(var(--sp-panel) * 0.9) var(--sp-panel) 0;
+	min-height: var(--band-h);
+	padding: 0 var(--sp-panel);
 	flex: none;
 }
 .view-head h2 {
@@ -781,7 +782,8 @@ button {
 	display: flex;
 	align-items: center;
 	gap: 9px;
-	padding: 11px var(--sp-card);
+	min-height: var(--band-h);
+	padding: 0 var(--sp-card);
 	border-bottom: 1px solid var(--border);
 	flex: none;
 }
@@ -795,6 +797,18 @@ button {
 	font-family: var(--font-mono);
 	font-size: var(--fs-xs);
 	color: var(--text-3);
+}
+/* Head-sized icon button: panel heads carry compact controls (the 26px
+   collapse chevron, .btn-sm), so the stock 32px .mz-iconbtn shrinks here —
+   one rule instead of a per-dock copy in each feature sheet. */
+.panel-head .mz-iconbtn {
+	width: 24px;
+	height: 24px;
+	font-size: 12px;
+}
+.panel-head .mz-iconbtn svg {
+	width: 12px;
+	height: 12px;
 }
 /* module grip — nod to plug-in modularity */
 .grip {

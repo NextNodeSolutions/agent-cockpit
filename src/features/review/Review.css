@@ -30,7 +30,10 @@
 	align-items: center;
 	flex-wrap: wrap;
 	gap: 11px;
-	padding: 10px var(--sp-panel);
+	/* min-height (not height): the strip may wrap at narrow widths, and the
+	   6px block padding keeps wrapped rows off the edges. */
+	min-height: var(--band-h);
+	padding: 6px var(--sp-panel);
 	flex: none;
 }
 
@@ -112,12 +115,15 @@
 .review-rail[data-collapsed='true'] {
 	width: var(--panel-band);
 }
-/* The rail has no panel-head, so its collapse control rides a small band
-   at the top-right corner. */
+/* The rail has no panel-head, so its collapse control rides a band-high
+   strip that caps the panel exactly like its siblings' heads. */
 .review-rail__band {
 	display: flex;
+	align-items: center;
 	justify-content: flex-end;
-	padding: 7px 7px 0;
+	min-height: var(--band-h);
+	padding: 0 var(--sp-card);
+	border-bottom: 1px solid var(--border);
 	flex: none;
 }
 
@@ -141,7 +147,9 @@
 	display: flex;
 	align-items: center;
 	gap: 9px;
-	padding: 11px var(--sp-card) 4px;
+	min-height: var(--band-h);
+	padding: 0 var(--sp-card);
+	border-bottom: 1px solid var(--border);
 	font-family: var(--font-mono);
 	font-size: var(--fs-xs);
 	color: var(--text-2);
@@ -327,7 +335,8 @@
 	display: flex;
 	align-items: center;
 	gap: 10px;
-	padding: 10px var(--sp-card);
+	min-height: var(--band-h);
+	padding: 0 var(--sp-card);
 	border-bottom: 1px solid var(--border);
 	flex: none;
 }

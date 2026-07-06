@@ -109,7 +109,9 @@
 	display: flex;
 	align-items: center;
 	gap: 6px;
-	padding: 11px var(--sp-card);
+	/* Band height so sibling cards align whether or not .proj-add renders. */
+	min-height: var(--band-h);
+	padding: 0 var(--sp-card);
 }
 
 /* The disclosure is a real <button>; reset it to the old header row look. */

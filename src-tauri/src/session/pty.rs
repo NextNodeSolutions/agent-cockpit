@@ -22,6 +22,32 @@ const DEFAULT_TERM_ENV: &[(&str, &str)] = &[
     ("LANG", "en_US.UTF-8"),
 ];
 
+/// Shells that accept `-l` (run as a login shell). Terminal emulators
+/// (Terminal.app, iTerm, Ghostty) conventionally spawn the user's shell as a
+/// LOGIN shell, so login-only profiles — `.zprofile` with its Homebrew
+/// `shellenv`, `.bash_profile` — are sourced. Mizraj matches that convention:
+/// a session whose binary is one of these shells gets `-l`; anything else
+/// (agent binaries like `claude`) spawns with no arguments, like a custom
+/// `command` in Ghostty.
+const LOGIN_SHELLS: &[&str] = &[
+    "zsh", "bash", "fish", "sh", "dash", "ksh", "tcsh", "csh", "nu",
+];
+
+/// The arguments a terminal-convention spawn adds for `binary`: `["-l"]` when
+/// it is a known shell ([`LOGIN_SHELLS`], matched on file name), empty
+/// otherwise. Pure so the shell/agent split is unit-testable.
+fn login_args(binary: &str) -> &'static [&'static str] {
+    let name = Path::new(binary)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("");
+    if LOGIN_SHELLS.contains(&name) {
+        &["-l"]
+    } else {
+        &[]
+    }
+}
+
 /// Merge [`DEFAULT_TERM_ENV`] with the caller's `env`, the caller winning on key
 /// collisions. A default is seeded ONLY when the parent environment lacks that
 /// key (`is_inherited` reports false): portable-pty applies the parent env as
@@ -52,7 +78,8 @@ pub struct PtySession {
     pub child: Box<dyn Child + Send + Sync>,
 }
 
-/// Spawn `binary` under a 24x80 PTY with the given `cwd` and `env`.
+/// Spawn `binary` under a 24x80 PTY with the given `cwd` and `env`. A known
+/// shell is spawned as a login shell ([`login_args`]).
 ///
 /// `env` is applied on top of the parent process environment (portable-pty
 /// inherits parent env by default); vars in `env` override matching parent
@@ -78,6 +105,7 @@ pub fn spawn(
         .map_err(|e| SessionError::Spawn(e.to_string()))?;
 
     let mut cmd = CommandBuilder::new(binary);
+    cmd.args(login_args(binary));
     cmd.cwd(cwd.as_ref());
     // A macOS GUI app launched from Finder/Dock/launchd inherits a bare
     // environment with no `TERM`, so the spawned shell's init (oh-my-zsh,
@@ -166,5 +194,47 @@ mod tests {
         let caller = HashMap::from([("TERM".to_string(), "dumb".to_string())]);
         let env = effective_env(&caller, |key| key == "TERM");
         assert_eq!(env.get("TERM").map(String::as_str), Some("dumb"));
+    }
+
+    #[test]
+    fn a_shell_binary_gets_the_login_flag() {
+        assert_eq!(login_args("/bin/zsh"), &["-l"]);
+        assert_eq!(login_args("/opt/homebrew/bin/fish"), &["-l"]);
+        assert_eq!(login_args("/bin/sh"), &["-l"]);
+    }
+
+    #[test]
+    fn an_agent_binary_spawns_with_no_arguments() {
+        assert!(login_args("/usr/local/bin/claude").is_empty());
+        // A path that merely CONTAINS a shell name is not a shell.
+        assert!(login_args("/opt/zsh-tools/bin/helper").is_empty());
+        assert!(login_args("").is_empty());
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn spawned_zsh_is_a_login_shell() {
+        use std::io::Write;
+
+        // An empty ZDOTDIR isolates the child from the developer's rc files:
+        // no prompt frameworks, no banners — the exit code is the only signal.
+        let zdotdir = tempfile::TempDir::new().expect("tempdir");
+        let env = HashMap::from([(
+            "ZDOTDIR".to_string(),
+            zdotdir.path().display().to_string(),
+        )]);
+
+        let mut session = spawn("/bin/zsh", "/tmp", &env).expect("spawn zsh");
+        session
+            .master_writer
+            .write_all(b"[[ -o login ]] && exit 42\nexit 1\n")
+            .expect("write probe to PTY");
+
+        let status = session.child.wait().expect("wait for zsh");
+        assert_eq!(
+            status.exit_code(),
+            42,
+            "zsh spawned by mizraj must run as a login shell"
+        );
     }
 }
